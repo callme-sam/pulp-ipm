@@ -1,0 +1,1 @@
+PULP Interior Point Method - A C-based Interior Point Method solver for standard-form Linear Programs, designed for parallelization on PULP architecture.

@@ -1,3 +1,4 @@
+#include <gsl/gsl_blas.h>
 #include <gsl/gsl_linalg.h>
 
 #include "ipm.h"
@@ -127,7 +128,7 @@ error:
 static void compute_residuals(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *c, const gsl_vector *x,
                                 const gsl_vector *v, gsl_vector *r_dual, gsl_vector *r_primal, double *r_norm)
 {
-    printf("%s - INFO: computing residuals\n", __func__);
+    // printf("%s - INFO: computing residuals\n", __func__);
 
     size_t n = x->size;
 
@@ -167,7 +168,7 @@ static int compute_newton_step(const gsl_matrix *A, const gsl_vector *r_dual, co
                                 const gsl_vector *x, gsl_vector *dx, gsl_vector *dv, gsl_matrix *M, gsl_vector *h_inv,
                                 gsl_permutation *perm)
 {
-    printf("%s - INFO: computing newton step\n", __func__);
+    // printf("%s - INFO: computing newton step\n", __func__);
 
     const size_t n = x->size;
     const size_t m = r_primal->size;
@@ -260,7 +261,7 @@ static double backtracking_line_search(const gsl_matrix *A, const gsl_vector *b,
                                         const gsl_vector *dv, double r_norm, double alpha, double beta,
                                         gsl_vector *x_new, gsl_vector *v_new, gsl_vector *r_dual, gsl_vector *r_primal)
 {
-    printf("%s - INFO: backtracking line search\n", __func__);
+    // printf("%s - INFO: backtracking line search\n", __func__);
 
     const size_t n = x->size;
     double t = 1.0;
@@ -321,7 +322,7 @@ static solution_t solve_centering(const gsl_matrix *A, const gsl_vector *b, cons
     solution_init(&sol);
     sol.status = FAILURE;
 
-    printf("%s - INFO: solving centering\n", __func__);
+    // printf("%s - INFO: solving centering\n", __func__);
     
     const size_t m = A->size1;
     const size_t n = A->size2;
@@ -560,7 +561,7 @@ static solution_t solve_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, c
             gsl_vector_set(sol.x_opt, i, v);
         }
     } else {
-        printf("%s - WARNING: Auxiliary Problem is Infeasible\n", __func__);
+        printf("%s - WARNING: Auxiliary Problem is Infeasible - status=%d - opt_val=%f - n_iters=%d\n", __func__, sol.status, sol.opt_val, sol.num_iters);
         sol.status = INFEASIBLE;
     }
 
@@ -592,6 +593,7 @@ static solution_t solve_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, c
  * @warning If \( A \) is rank-deficient or ill-conditioned, the solution may be numerically unstable.
  *          No checks are performed on the condition number of \( A \).
  */
+/*
 static gsl_vector *pinv_solve(const gsl_matrix *A, const gsl_vector *b)
 {
     gsl_matrix *A_cpy;
@@ -654,6 +656,95 @@ exit:
 
     return x;
 }
+*/
+
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_linalg.h>
+#include <gsl/gsl_blas.h>
+#include <math.h>
+
+static gsl_vector *pinv_solve(const gsl_matrix *A, const gsl_vector *b) {
+    size_t M = A->size1;  // Numero di righe
+    size_t N = A->size2;  // Numero di colonne
+    double tolerance = 1e-10;
+    gsl_vector *x = gsl_vector_alloc(N);
+
+    if (M >= N) {
+        // Caso M >= N (sovradeterminato)
+        gsl_matrix *A_copy = gsl_matrix_alloc(M, N);
+        gsl_matrix_memcpy(A_copy, A);
+        
+        gsl_matrix *V = gsl_matrix_alloc(N, N);
+        gsl_vector *S = gsl_vector_alloc(N);
+        gsl_vector *work = gsl_vector_alloc(N);
+        
+        gsl_linalg_SV_decomp(A_copy, V, S, work);
+        
+        // temp = U^T * b
+        gsl_vector *temp = gsl_vector_alloc(N);
+        gsl_blas_dgemv(CblasTrans, 1.0, A_copy, b, 0.0, temp);
+        
+        // Applica pseudoinversa: temp = S⁺ * temp
+        for (size_t i = 0; i < N; i++) {
+            double s_val = gsl_vector_get(S, i);
+            if (s_val > tolerance) {
+                gsl_vector_set(temp, i, gsl_vector_get(temp, i) / s_val);
+            } else {
+                gsl_vector_set(temp, i, 0.0);
+            }
+        }
+        
+        // x = V * temp
+        gsl_blas_dgemv(CblasNoTrans, 1.0, V, temp, 0.0, x);
+        
+        // Libera memoria
+        gsl_matrix_free(A_copy);
+        gsl_matrix_free(V);
+        gsl_vector_free(S);
+        gsl_vector_free(work);
+        gsl_vector_free(temp);
+        
+    } else {
+        // Caso M < N (sottodeterminato)
+        gsl_matrix *AT = gsl_matrix_alloc(N, M);
+        gsl_matrix_transpose_memcpy(AT, A);  // AT = A^T (N x M)
+        
+        gsl_matrix *V = gsl_matrix_alloc(M, M);
+        gsl_vector *S = gsl_vector_alloc(M);
+        gsl_vector *work = gsl_vector_alloc(M);
+        
+        gsl_linalg_SV_decomp(AT, V, S, work);  // AT ora contiene U (N x M)
+        
+        // temp1 = V^T * b
+        gsl_vector *temp1 = gsl_vector_alloc(M);
+        gsl_blas_dgemv(CblasTrans, 1.0, V, b, 0.0, temp1);
+        
+        // temp1 = S⁺ * temp1
+        for (size_t i = 0; i < M; i++) {
+            double s_val = gsl_vector_get(S, i);
+            if (s_val > tolerance) {
+                gsl_vector_set(temp1, i, gsl_vector_get(temp1, i) / s_val);
+            } else {
+                gsl_vector_set(temp1, i, 0.0);
+            }
+        }
+        
+        // x = AT * temp1 (AT contiene U, quindi U * temp1)
+        gsl_blas_dgemv(CblasNoTrans, 1.0, AT, temp1, 0.0, x);
+        
+        // Libera memoria
+        gsl_matrix_free(AT);
+        gsl_matrix_free(V);
+        gsl_vector_free(S);
+        gsl_vector_free(work);
+        gsl_vector_free(temp1);
+    }
+    
+    return x;
+}
+
+
 
 /**
  * @brief Performs Phase I of the interior point method to find a feasible starting point.

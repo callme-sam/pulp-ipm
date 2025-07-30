@@ -79,7 +79,7 @@ int main()
     gsl_vector *c;
 
     rows = 5;
-    cols = 5;
+    cols = 7;
 
     A = gsl_matrix_alloc(rows, cols);
     b = gsl_vector_alloc(rows);

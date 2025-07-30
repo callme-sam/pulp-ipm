@@ -24,7 +24,7 @@ endif
 
 # Rules
 
-.PHONY: all clean run
+.PHONY: all clean run test
 
 all: $(TARGET)
 
@@ -55,3 +55,8 @@ clean:
 run: $(TARGET)
 	$(V)echo "Running $(TARGET)"
 	$(V)./$(TARGET)
+
+# Test
+test:
+	$(V)$(MAKE) -C test
+	$(V)./test/run_tests.py

@@ -12,7 +12,7 @@ TARGET = $(BUILD_DIR)/ipm_solver
 CC = gcc
 CFLAGS = -Wall -Wextra -I$(INC_DIR)
 LDFLAGS = -lgsl -lgslcblas -lm
-
+MAKEFLAGS += --no-print-directory
 
 # Verbosity
 VERBOSE ?= 0
@@ -58,5 +58,7 @@ run: $(TARGET)
 
 # Test
 test:
-	$(V)$(MAKE) -C test
-	$(V)./test/run_tests.py
+	$(V)$(MAKE)  -C test test
+
+test_clean:
+	$(V)$(MAKE) -C test clean

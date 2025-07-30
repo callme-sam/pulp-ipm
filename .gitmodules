@@ -1,0 +1,6 @@
+[submodule "python/LP-Solver"]
+	path = python/LP-Solver
+	url = git@github.com:junjiedong/LP-Solver.git
+[submodule "python/lp_solver"]
+	path = python/lp_solver
+	url = git@github.com:junjiedong/LP-Solver.git

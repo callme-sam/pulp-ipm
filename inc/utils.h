@@ -17,4 +17,6 @@ bool has_nonpositive_elements(const gsl_vector *v);
 gsl_vector *vector_ones(size_t n);
 gsl_vector *vector_concat(const gsl_vector *v, double b);
 
+void generate_lp(gsl_matrix **A, gsl_vector **b, gsl_vector **c);
+
 #endif  /* UTILS_H_ */

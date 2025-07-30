@@ -156,34 +156,41 @@ void load_problem_data(const char* filename, gsl_matrix** A, gsl_vector** b, gsl
     
     // Read matrix A
     size_t rows, cols;
-    (void) fread(&rows, sizeof(size_t), 1, file);
-    (void) fread(&cols, sizeof(size_t), 1, file);
+    int ret;
+    ret = fread(&rows, sizeof(size_t), 1, file);
+    if (ret != 1) return;
+    ret = fread(&cols, sizeof(size_t), 1, file);
+    if (ret != 1) return;
     *A = gsl_matrix_alloc(rows, cols);
     for (size_t i = 0; i < rows; i++) {
         for (size_t j = 0; j < cols; j++) {
             double val;
-            (void) fread(&val, sizeof(double), 1, file);
+            ret = fread(&val, sizeof(double), 1, file);
+            if (ret != 1) return;
             gsl_matrix_set(*A, i, j, val);
         }
     }
     
     // Read vector b
     size_t size_b;
-    (void) fread(&size_b, sizeof(size_t), 1, file);
+    ret = fread(&size_b, sizeof(size_t), 1, file);
+    if (ret != 1) return;
     *b = gsl_vector_alloc(size_b);
     for (size_t i = 0; i < size_b; i++) {
         double val;
-        (void) fread(&val, sizeof(double), 1, file);
+        ret = fread(&val, sizeof(double), 1, file);
         gsl_vector_set(*b, i, val);
     }
     
     // Read vector c
     size_t size_c;
-    (void) fread(&size_c, sizeof(size_t), 1, file);
+    ret = fread(&size_c, sizeof(size_t), 1, file);
+    if (ret != 1) return;
     *c = gsl_vector_alloc(size_c);
     for (size_t i = 0; i < size_c; i++) {
         double val;
-        (void) fread(&val, sizeof(double), 1, file);
+        ret = fread(&val, sizeof(double), 1, file);
+        if (ret != 1) return;
         gsl_vector_set(*c, i, val);
     }
     

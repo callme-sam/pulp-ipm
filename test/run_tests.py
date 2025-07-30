@@ -20,11 +20,11 @@ TOLERANCE = 1e-3  # Tolerance for comparing results
 
 def run_c_solver(problem_file, test_num):
     """Run the C solver and return output files"""
-    c_val_file = f"test/test_data/c_opt_val_{test_num}.txt"
-    c_vec_file = f"test/test_data/c_x_opt_{test_num}.txt"
+    c_val_file = f"test/build/test_data/c_opt_val_{test_num}.txt"
+    c_vec_file = f"test/build/test_data/c_x_opt_{test_num}.txt"
     
     # Build path to C executable
-    c_executable = Path(__file__).parent / "test_lp_solver"
+    c_executable = Path(__file__).parent / "build" / "test_lp_solver"
     
     # Run C program
     cmd = f"{c_executable} {problem_file} {c_val_file} {c_vec_file}"
@@ -81,7 +81,7 @@ def compare_results(c_val, py_val, c_x, py_x, test_num):
 
 def main():
     # Create test directory if it doesn't exist
-    os.makedirs('test/test_data', exist_ok=True)
+    os.makedirs('test/build/test_data', exist_ok=True)
     
     # Compile C test solver
     print("Compiling C test solver...")
@@ -97,10 +97,10 @@ def main():
         print(f"\nRunning Test {i} with m={m}, n={n}")
         
         # Generate problem file
-        problem_file = f"test/test_data/test_{i}.bin"
+        problem_file = f"test/build/test_data/test_{i}.bin"
         
         # Generate and save problem data
-        generate_cmd = f"test/generate_test_data {m} {n} {problem_file}"
+        generate_cmd = f"test/build/generate_test_data {m} {n} {problem_file}"
         subprocess.run(generate_cmd, shell=True, check=True)
         
         # Run Python solver

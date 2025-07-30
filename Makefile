@@ -1,39 +1,57 @@
+
+BUILD_DIR = build
+OBJ_DIR = $(BUILD_DIR)/obj
+SRC_DIR = src
+INC_DIR = inc
+
+SRC = main.c $(wildcard $(SRC_DIR)/*.c)
+OBJ = $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRC))
+DEP = $(patsubst %.c, $(OBJ_DIR)/%.d, $(SRC))
+TARGET = $(BUILD_DIR)/ipm_solver
+
 CC = gcc
-CFLAGS = -Wall -Wextra -Iinc
+CFLAGS = -Wall -Wextra -I$(INC_DIR)
 LDFLAGS = -lgsl -lgslcblas -lm
 
-SRC = main.c $(wildcard src/*.c)
-OBJ = $(patsubst %.c, build/obj/%.o, $(SRC))
-TARGET = build/ipm_solver
 
-# Variabile per verbose (default off)
+# Verbosity
 VERBOSE ?= 0
-
 ifeq ($(VERBOSE),1)
   V =
 else
   V = @
 endif
 
-# Crea le directory necessarie
-$(shell mkdir -p build/obj/src)
+# Rules
+
+.PHONY: all clean run
 
 all: $(TARGET)
 
-# Regola per l'eseguibile
-$(TARGET): $(OBJ)
+-include $(DEP)
+
+# Link
+$(TARGET): $(OBJ) | $(BUILD_DIR)
+	$(V)echo "Linking $@"
 	$(V)$(CC) -o $@ $^ $(LDFLAGS)
-	$(if $(filter 1,$(VERBOSE)), echo "Linking $@")
 
-# Compila ogni .c in build/obj
-build/obj/%.o: %.c inc/ipm.h
-	@mkdir -p $(dir $@)
-	$(V)$(CC) $(CFLAGS) -c $< -o $@
-	$(if $(filter 1,$(VERBOSE)), echo "Compiling $<")
+# Compile
+$(OBJ_DIR)/%.o: %.c
+	$(V)mkdir -p $(dir $@)
+	$(V)echo "Compiling $<"
+	$(V)$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
+# Build directory
+$(BUILD_DIR):
+	$(V)echo "Creating directory $@"
+	$(V)mkdir -p $@
+
+# Clean
 clean:
+	$(V)echo "Cleaning build directory"
 	$(V)rm -rf build/
-	$(if $(filter 1,$(VERBOSE)), echo "Cleaned build directory")
 
+# Run
 run: $(TARGET)
+	$(V)echo "Running $(TARGET)"
 	$(V)./$(TARGET)

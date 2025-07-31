@@ -681,31 +681,30 @@ static gsl_vector *pinv_solve(const gsl_matrix *A, const gsl_vector *b) {
     return x;
 }
 
-
-
 /**
  * @brief Performs Phase I of the interior point method to find a feasible starting point.
  *
  * This function constructs and solves an auxiliary (Phase I) linear program to determine whether the original LP
- * problem has at least one feasible point (i.e., a point x such that Ax = b and x > 0). If the LP problem is strictly
- * feasible, then it look for a feasible starting point.
+ * problem has at least one feasible point (i.e., a point x such that Ax = b and x > 0). If the problem is strictly
+ * feasible, the function attempts to use the pseudo-inverse to find a starting point directly. Otherwise, it formulates
+ * and solves an auxiliary LP to find one.
  *
- * @param [in] A    Constraint matrix of size m x n (rows x cols).
- * @param [in] b    Right-hand side vector of size m.
+ * @param [in] A Constraint matrix of size m x n (rows × columns).
+ * @param [in] b Right-hand side vector of size m.
  *
- * @return solution_t Solution containing:
- *         - status: OPTIMAL/INFEASIBLE/FAILURE
+ * @return solution_t A solution object containing:
+ *         - status: OPTIMAL / INFEASIBLE / FAILURE
  *         - x_opt: Feasible starting point (if status == OPTIMAL)
  *         - Diagnostics fields may be empty
  */
 static solution_t phase_one(const gsl_matrix *A, const gsl_vector *b)
 {
+    LOG_INFO("Solving phase I");
+
     solution_t sol;
     solution_init(&sol);
 
-    LOG_INFO("Solving phase I");
-
-    // Step 1: Compute initial poitn via pseudo-inverse
+    // Step 1: Compute initial point via pseudo-inverse
     gsl_vector *x;
     x = pinv_solve(A, b);
     if (!x) {
@@ -718,25 +717,21 @@ static solution_t phase_one(const gsl_matrix *A, const gsl_vector *b)
     if (has_nonpositive_elements(x)) {
         LOG_INFO("X is NOT a strictly feasible starting point, constructing Auxiliary LP Problem");
 
-        // Step 3: Solve auxiliary LP if needed
-        solution_t aux_sol = solve_auxiliary_lp(A, b, x);
-        gsl_vector_free(x);
-
-        if (aux_sol.status == OPTIMAL) {
-            LOG_INFO("Auxiliary LP problem is feasible");
-            return aux_sol;
-        } else {
-            LOG_WARNING("Auxiliary LP problem is INFEASIBLE");
-            sol.status = aux_sol.status;
-            solution_free(&aux_sol);
-            return sol;
-        }
+        // Step 3: Solve auxiliary LP
+        solution_t aux_sol;
+        aux_sol = solve_auxiliary_lp(A, b, x);
+        solution_copy(&sol, &aux_sol);
+        solution_free(&aux_sol);
     } else {
         LOG_INFO("X is a strictly feasible starting point");
+
         sol.status = OPTIMAL;
-        sol.x_opt = x;
-        return sol;
+        sol.x_opt = gsl_vector_alloc(x->size);
+        gsl_vector_memcpy(sol.x_opt, x);
     }
+
+    if (x) gsl_vector_free(x);
+    return sol;
 }
 
 /**

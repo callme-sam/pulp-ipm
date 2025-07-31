@@ -417,42 +417,57 @@ cleanup:
 }
 
 /**
- * @brief
+ * @brief Solves a linear program with a feasible starting point using the interior point method.
  *
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
+ * This function implements a path-following interior point method for solving a linear program of the form:
+ *      minimize     cᵀx
+ *      subject to   Ax = b
+ *                   x > 0
+ * starting from a strictly feasible point `x0`.
  *
+ * It repeatedly solves a series of centering problems for increasing values of the barrier parameter `t`,
+ * updating the solution estimate and tracking convergence via the duality gap.
  *
- * @return solution_t {description}
+ * @param[in] A   Constraint matrix of size m × n.
+ * @param[in] b   Right-hand side vector of size m.
+ * @param[in] c   Cost vector of size n.
+ * @param[in] x0  Strictly feasible initial point (x0 > 0), vector of size n.
+ *
+ * @return solution_t Structure containing:
+ *         - status: OPTIMAL if convergence is reached, FAILURE otherwise.
+ *         - x_opt: Optimal primal solution (if status == OPTIMAL).
+ *         - v_opt: Optimal dual solution (if available).
+ *         - opt_val: Optimal objective value cᵀx.
+ *         - duality_gaps: Sequence of duality gap values for each iteration.
+ *         - newton_steps: Number of Newton steps taken at each centering iteration.
+ *
+ * @note The caller is responsible for freeing the fields of the returned solution with `solution_free()`.
+ * @warning If the centering step fails during any iteration, the solver terminates early with FAILURE status.
  */
 static solution_t solve_feasible_start(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *c, const gsl_vector *x0)
 {
+    LOG_INFO("solving feasible start");
+
     solution_t sol;
     gsl_vector *tc;
     gsl_vector *x;
     double gap;
     double t;
 
-    LOG_INFO("solving feasible start");
-
     solution_init(&sol);
-    t = 1.0;
-
     sol.duality_gaps = gsl_vector_alloc(MAX_ITER);
     sol.newton_steps = gsl_vector_alloc(MAX_ITER);
     tc = gsl_vector_alloc(c->size);
     x = gsl_vector_alloc(x0->size);
     gsl_vector_memcpy(x, x0);
+    t = 1.0;
 
     for (sol.num_iters = 0; sol.num_iters < MAX_ITER; sol.num_iters++) {
-        solution_t center_sol;
 
         // Solve centering problem with current t
+        solution_t center_sol;
         gsl_vector_memcpy(tc, c);
-        gsl_vector_scale(tc, t);
-
+        gsl_vector_scale(tc, t);    // tc = t * c
         center_sol = solve_centering(A, b, tc, x);
         if (center_sol.status != OPTIMAL) {
             LOG_ERROR("Centering step failed at iteration %d", sol.num_iters);
@@ -463,7 +478,7 @@ static solution_t solve_feasible_start(const gsl_matrix *A, const gsl_vector *b,
         // Update solution
         gsl_vector_memcpy(x, center_sol.x_opt);
 
-        // Compute duality gap
+        // Compute and store duality gap and newton steps
         gap = A->size2 / t;
         gsl_vector_set(sol.duality_gaps, sol.num_iters, gap);
         gsl_vector_set(sol.newton_steps, sol.num_iters, center_sol.num_iters);
@@ -476,6 +491,7 @@ static solution_t solve_feasible_start(const gsl_matrix *A, const gsl_vector *b,
             gsl_vector_memcpy(sol.x_opt, x);
             gsl_vector_memcpy(sol.v_opt, center_sol.v_opt);
             gsl_blas_ddot(c, x, &sol.opt_val);
+            solution_free(&center_sol);
             break;
         }
 

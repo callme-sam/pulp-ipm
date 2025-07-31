@@ -81,9 +81,6 @@ void solution_free(solution_t *sol) {
 int solution_copy(solution_t *dest, const solution_t *src) {
     if (!dest || !src) return -1;
 
-    // Free any existing data in destination
-    solution_free(dest);
-
     // Copy basic fields
     dest->status = src->status;
     dest->opt_val = src->opt_val;
@@ -743,29 +740,42 @@ static solution_t phase_one(const gsl_matrix *A, const gsl_vector *b)
 }
 
 /**
- * @brief
+ * @brief Solves a linear programming (LP) problem using a two-phase method.
  *
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
+ * This function applies a two-phase approach:
+ * - **Phase I:** finds a feasible starting point.
+ * - **Phase II:** performs optimization starting from the feasible solution found.
  *
+ * If Phase I fails, the problem is declared INFEASIBLE.
  *
- * @return solution_e {description}
+ * @param A Constraint matrix (m x n) of the LP problem.
+ * @param b Right-hand side vector (m x 1) of the constraints.
+ * @param c Coefficient vector of the objective function (n x 1).
+ *
+ * @return solution_t A `solution_t` object containing:
+ *  - `status`: the solution status (e.g., OPTIMAL, INFEASIBLE).
+ *  - `x_opt`: the optimal solution found (if any).
+ *  - `value`: the optimal objective function value (if computed).
  */
 solution_t solve(gsl_matrix *A, gsl_vector *b, gsl_vector *c)
 {
-    solution_t global_sol;
     solution_t phase1_sol;
+    solution_t phase2_sol;
+    solution_t sol;
 
     LOG_INFO("Solving LP problem");
 
     phase1_sol = phase_one(A, b);
     if (phase1_sol.status == OPTIMAL) {
         LOG_INFO("Phase I got a feasible starting point, computing Phase II");
-        global_sol = solve_feasible_start(A, b, c, phase1_sol.x_opt);
-        solution_free(&phase1_sol);
-        return global_sol;
+        phase2_sol = solve_feasible_start(A, b, c, phase1_sol.x_opt);
+        solution_copy(&sol, &phase2_sol);
+    } else {
+        LOG_ERROR("Phase I failed. Original LP is INFEASIBLE");
+        solution_copy(&sol, &phase1_sol);
     }
 
-    return phase1_sol;
+    solution_free(&phase1_sol);
+    solution_free(&phase2_sol);
+    return sol;
 }

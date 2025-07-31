@@ -12,6 +12,21 @@
 #define TOL         (1e-3)
 #define MU          (10.0)
 
+/**
+ * @brief Converts a problem status code to its string representation.
+ *
+ * This function maps an enumerated value of type `problem_status_e` to a
+ * human-readable string. Useful for logging or displaying the status of a
+ * linear programming solution.
+ *
+ * @param status The problem status to convert (e.g., OPTIMAL, INFEASIBLE, FAILURE).
+ *
+ * @return A string corresponding to the given status:
+ *         - "optimal" if status == OPTIMAL
+ *         - "infeasible" if status == INFEASIBLE
+ *         - "failure" if status == FAILURE
+ *         - "Error" for any unrecognized status
+ */
 const char *to_string(problem_status_e status)
 {
     switch(status) {
@@ -23,9 +38,18 @@ const char *to_string(problem_status_e status)
 }
 
 /**
- * @brief Initialize a solution structure with default values
+ * @brief Initializes a solution structure with default values.
  *
- * @param sol Pointer to the solution structure to initialize
+ * This function sets the fields of a `solution_t` structure to safe default values:
+ * - `status` is set to `FAILURE`
+ * - `x_opt`, `v_opt`, `duality_gaps`, and `newton_steps` are set to NULL
+ * - `opt_val` is set to 0.0
+ * - `num_iters` is set to 0
+ *
+ * This should be called before the structure is used, to avoid undefined behavior.
+ *
+ * @param[in,out] sol Pointer to the `solution_t` structure to initialize.
+ *                    If NULL, the function does nothing.
  */
 void solution_init(solution_t *sol) {
     if (!sol) return;
@@ -40,9 +64,22 @@ void solution_init(solution_t *sol) {
 }
 
 /**
- * @brief Free all memory allocated in a solution structure
+ * @brief Frees all dynamically allocated memory in a solution structure.
  *
- * @param sol Pointer to the solution structure to free
+ * This function deallocates any memory previously allocated for the fields of
+ * a `solution_t` structure, including:
+ * - `x_opt`: optimal primal solution vector
+ * - `v_opt`: optimal dual variables vector
+ * - `duality_gaps`: vector of duality gap values at each iteration
+ * - `newton_steps`: vector of Newton step counts at each iteration
+ *
+ * After deallocation, all pointers are set to `NULL`, and numeric fields are reset
+ * to their default values (`opt_val = 0.0`, `num_iters = 0`, `status = FAILURE`).
+ *
+ * It is safe to call this function multiple times on the same structure.
+ *
+ * @param[in,out] sol Pointer to the `solution_t` structure to clean up.
+ *                    If NULL, the function does nothing.
  */
 void solution_free(solution_t *sol) {
     if (!sol) return;
@@ -73,11 +110,23 @@ void solution_free(solution_t *sol) {
 }
 
 /**
- * @brief Create a deep copy of a solution structure
+ * @brief Creates a deep copy of a solution structure.
  *
- * @param dest Destination solution (must be initialized)
- * @param src Source solution to copy from
- * @return int 0 on success, -1 on error
+ * This function copies the contents of a `solution_t` structure from a source to a destination,
+ * including all dynamically allocated vectors. The destination structure (`dest`) must be
+ * properly initialized (e.g., via `solution_init`) before calling this function, and must not
+ * contain already allocated memory to avoid leaks.
+ *
+ * If any memory allocation fails during the copy process, the destination structure is cleaned
+ * up with `solution_free()` and the function returns -1.
+ *
+ * @param[out] dest Pointer to the destination `solution_t` structure.
+ * @param[in]  src  Pointer to the source `solution_t` structure to copy.
+ *
+ * @return 0 on success, -1 on failure (e.g. memory allocation error or NULL pointers).
+ *
+ * @note The destination is overwritten; ensure it is not holding previously allocated data.
+ *       Call `solution_free(dest)` first if needed.
  */
 int solution_copy(solution_t *dest, const solution_t *src) {
     if (!dest || !src) return -1;
@@ -120,18 +169,25 @@ error:
 }
 
 /**
- * @brief
+ * @brief Computes the residuals and their combined norm for the Newton step.
  *
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
+ * This function computes the dual and primal residuals used in the infeasible start Newton method
+ * for solving linear programming problems in barrier form:
  *
+ * - Dual residual: \f$ r_{\text{dual}} = c - X^{-1}\mathbf{1} + A^T v \f$
+ * - Primal residual: \f$ r_{\text{primal}} = Ax - b \f$
+ * - Combined residual norm: \f$ \|r_{\text{dual}}\|^2 + \|r_{\text{primal}}\|^2 \f$
  *
+ * These quantities are used to determine convergence and drive the Newton direction updates.
+ *
+ * @param[in]  A        Constraint matrix of size (m x n).
+ * @param[in]  b        Right-hand side vector of size (m).
+ * @param[in]  c        Cost vector of size (n).
+ * @param[in]  x        Current primal variable vector (must be strictly positive).
+ * @param[in]  v        Current dual variable vector.
+ * @param[out] r_dual   Output dual residual vector (size n).
+ * @param[out] r_primal Output primal residual vector (size m).
+ * @param[out] r_norm   Output scalar for the combined residual norm.
  */
 static void compute_residuals(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *c, const gsl_vector *x,
                                 const gsl_vector *v, gsl_vector *r_dual, gsl_vector *r_primal, double *r_norm)
@@ -266,14 +322,14 @@ static int compute_newton_step(const gsl_matrix *A, const gsl_vector *r_dual, co
  */
 static double backtracking_line_search(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *c,
                                         const gsl_vector *x, const gsl_vector *v, const gsl_vector *dx,
-                                        const gsl_vector *dv, double r_norm, double alpha, double beta,
-                                        gsl_vector *x_new, gsl_vector *v_new, gsl_vector *r_dual, gsl_vector *r_primal)
+                                        const gsl_vector *dv, double r_norm, gsl_vector *x_new, gsl_vector *v_new,
+                                        gsl_vector *r_dual, gsl_vector *r_primal)
 {
     LOG_DEBUG("Backtracking line search");
     const size_t n = x->size;
     double t = 1.0;
 
-    // Step 1: keep x g.t. 0
+    // Step 1: keep x >= 0
     while (1) {
         bool positive = true;
         for (size_t i = 0; i < n; i++) {
@@ -285,7 +341,7 @@ static double backtracking_line_search(const gsl_matrix *A, const gsl_vector *b,
             }
         }
         if (positive) break;
-        t *= beta;
+        t *= BETA;
     }
 
     // Step 2: reduce residual norm
@@ -303,10 +359,10 @@ static double backtracking_line_search(const gsl_matrix *A, const gsl_vector *b,
         compute_residuals(A, b, c, x_new, v_new, r_dual, r_primal, &r_norm_new);
 
         // Check
-        if (r_norm_new <= (1 - alpha * t) * r_norm) {
+        if (r_norm_new <= (1 - ALPHA * t) * r_norm) {
             break;
         } else {
-            t *= beta;
+            t *= BETA;
         }
     }
 
@@ -325,54 +381,39 @@ static double backtracking_line_search(const gsl_matrix *A, const gsl_vector *b,
  */
 static solution_t solve_centering(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *c, gsl_vector *x0)
 {
-    solution_t sol;
-    solution_init(&sol);
-    sol.status = FAILURE;
-
     LOG_DEBUG("Solving centering");
 
-    const size_t m = A->size1;
-    const size_t n = A->size2;
-    const double convergence_threshold = 1e-6;
-    const int max_iter = 100;
-    const double alpha = ALPHA;
-    const double beta = BETA;
+    solution_t sol;
+    solution_init(&sol);
 
-    // Allocazione memoria
-    gsl_vector *x = gsl_vector_alloc(n);
-    gsl_vector *v = gsl_vector_alloc(m);
-    gsl_vector *r_dual = gsl_vector_alloc(n);
-    gsl_vector *r_primal = gsl_vector_alloc(m);
-    gsl_vector *dx = gsl_vector_alloc(n);
-    gsl_vector *dv = gsl_vector_alloc(m);
-    gsl_vector *x_new = gsl_vector_alloc(n);
-    gsl_vector *v_new = gsl_vector_alloc(m);
-    gsl_matrix *M = gsl_matrix_alloc(m, m);
-    gsl_vector *work = gsl_vector_alloc(n);
-    gsl_permutation *perm = gsl_permutation_alloc(m);
+    const size_t rows = A->size1;
+    const size_t cols = A->size2;
+    int iter;
 
-    if (!x || !v || !r_dual || !r_primal || !dx || !dv ||
-        !x_new || !v_new || !M || !work || !perm) {
-        goto cleanup;
-    }
+    gsl_vector *x = gsl_vector_alloc(cols);
+    gsl_vector *v = gsl_vector_alloc(rows);
+    gsl_vector *r_dual = gsl_vector_alloc(cols);
+    gsl_vector *r_primal = gsl_vector_alloc(rows);
+    gsl_vector *dx = gsl_vector_alloc(cols);
+    gsl_vector *dv = gsl_vector_alloc(rows);
+    gsl_vector *x_new = gsl_vector_alloc(cols);
+    gsl_vector *v_new = gsl_vector_alloc(rows);
+    gsl_matrix *M = gsl_matrix_alloc(rows, rows);
+    gsl_vector *work = gsl_vector_alloc(cols);
+    gsl_permutation *perm = gsl_permutation_alloc(rows);
 
-    // Inizializza variabili
     gsl_vector_memcpy(x, x0);
     gsl_vector_set_zero(v);
 
-    // Loop di Newton
-    int iter;
-    for (iter = 0; iter < max_iter; iter++) {
+    for (iter = 0; iter < MAX_ITER; iter++) {
         double r_norm;
 
-        // 1. Calcola residui
         compute_residuals(A, b, c, x, v, r_dual, r_primal, &r_norm);
 
-        // 2. Controlla convergenza
-        if (r_norm <= convergence_threshold) {
+        if (r_norm <= CONV) {
             sol.status = OPTIMAL;
-            sol.x_opt = gsl_vector_alloc(n);
-            sol.v_opt = gsl_vector_alloc(m);
+            sol.x_opt = gsl_vector_alloc(cols);
+            sol.v_opt = gsl_vector_alloc(rows);
             if (sol.x_opt && sol.v_opt) {
                 gsl_vector_memcpy(sol.x_opt, x);
                 gsl_vector_memcpy(sol.v_opt, v);
@@ -381,25 +422,20 @@ static solution_t solve_centering(const gsl_matrix *A, const gsl_vector *b, cons
             break;
         }
 
-        // 3. Calcola passi di Newton
         if (compute_newton_step(A, r_dual, r_primal, x, dx, dv, M, work, perm) != 0) {
             break;
         }
 
-        // 4. Backtracking line search
-        backtracking_line_search(A, b, c, x, v, dx, dv, r_norm, alpha, beta, x_new, v_new, r_dual, r_primal);
+        backtracking_line_search(A, b, c, x, v, dx, dv, r_norm, x_new, v_new, r_dual, r_primal);
 
-        // 5. Aggiorna variabili
         gsl_vector_memcpy(x, x_new);
         gsl_vector_memcpy(v, v_new);
     }
 
-    if (iter == max_iter) {
+    if (iter == MAX_ITER) {
         sol.status = FAILURE;
     }
 
-cleanup:
-    // Libera memoria
     if (x) gsl_vector_free(x);
     if (v) gsl_vector_free(v);
     if (r_dual) gsl_vector_free(r_dual);

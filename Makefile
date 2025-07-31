@@ -14,13 +14,17 @@ CFLAGS = -Wall -Wextra -I$(INC_DIR)
 LDFLAGS = -lgsl -lgslcblas -lm
 MAKEFLAGS += --no-print-directory
 
-# Verbosity
+# Makefile Verbosity
 VERBOSE ?= 0
 ifeq ($(VERBOSE),1)
   V =
 else
   V = @
 endif
+
+# Log Verbosity
+LOG_LEVEL ?= 3	# default is INFO
+CFLAGS += -DCURRENT_LOG_LEVEL=$(LOG_LEVEL)
 
 # Rules
 

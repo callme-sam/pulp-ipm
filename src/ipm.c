@@ -138,7 +138,7 @@ error:
 static void compute_residuals(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *c, const gsl_vector *x,
                                 const gsl_vector *v, gsl_vector *r_dual, gsl_vector *r_primal, double *r_norm)
 {
-    // printf("%s - INFO: computing residuals\n", __func__);
+    LOG_DEBUG("Computing residuals\n");
 
     size_t n = x->size;
 
@@ -178,7 +178,7 @@ static int compute_newton_step(const gsl_matrix *A, const gsl_vector *r_dual, co
                                 const gsl_vector *x, gsl_vector *dx, gsl_vector *dv, gsl_matrix *M, gsl_vector *h_inv,
                                 gsl_permutation *perm)
 {
-    // printf("%s - INFO: computing newton step\n", __func__);
+    LOG_DEBUG("Computing newton step");
 
     const size_t n = x->size;
     const size_t m = r_primal->size;
@@ -218,7 +218,7 @@ static int compute_newton_step(const gsl_matrix *A, const gsl_vector *r_dual, co
     int signum;
     int status = gsl_linalg_LU_decomp(M, perm, &signum);
     if (status != GSL_SUCCESS) {
-        printf("%s - ERROR! LU decomp failed: %s\n", __func__, gsl_strerror(status));
+        LOG_ERROR("LU decomp failed: %s\n", gsl_strerror(status));
         gsl_vector_free(A_hinv_rt);
         gsl_vector_free(temp);
         gsl_vector_free(rhs);
@@ -230,7 +230,7 @@ static int compute_newton_step(const gsl_matrix *A, const gsl_vector *r_dual, co
     gsl_vector_free(temp);
     gsl_vector_free(rhs);
     if (status != GSL_SUCCESS) {
-        printf("%s - ERROR! LU solve failed: %s\n", __func__, gsl_strerror(status));
+        LOG_ERROR("LU solve failed: %s\n", gsl_strerror(status));
         return -1;
     }
 
@@ -271,8 +271,7 @@ static double backtracking_line_search(const gsl_matrix *A, const gsl_vector *b,
                                         const gsl_vector *dv, double r_norm, double alpha, double beta,
                                         gsl_vector *x_new, gsl_vector *v_new, gsl_vector *r_dual, gsl_vector *r_primal)
 {
-    // printf("%s - INFO: backtracking line search\n", __func__);
-
+    LOG_DEBUG("Backtracking line search");
     const size_t n = x->size;
     double t = 1.0;
 
@@ -332,7 +331,7 @@ static solution_t solve_centering(const gsl_matrix *A, const gsl_vector *b, cons
     solution_init(&sol);
     sol.status = FAILURE;
 
-    // printf("%s - INFO: solving centering\n", __func__);
+    LOG_DEBUG("Solving centering");
 
     const size_t m = A->size1;
     const size_t n = A->size2;
@@ -438,7 +437,7 @@ static solution_t solve_feasible_start(const gsl_matrix *A, const gsl_vector *b,
     double gap;
     double t;
 
-    printf("%s - INFO: solving feasible start\n", __func__);
+    LOG_INFO("solving feasible start");
 
     solution_init(&sol);
     t = 1.0;
@@ -458,7 +457,7 @@ static solution_t solve_feasible_start(const gsl_matrix *A, const gsl_vector *b,
 
         center_sol = solve_centering(A, b, tc, x);
         if (center_sol.status != OPTIMAL) {
-            printf("%s - ERROR: centering step failed at iteration %d\n", __func__, sol.num_iters);
+            LOG_ERROR("Centering step failed at iteration %d", sol.num_iters);
             solution_free(&center_sol);
             break;
         }
@@ -486,7 +485,7 @@ static solution_t solve_feasible_start(const gsl_matrix *A, const gsl_vector *b,
         solution_free(&center_sol);
     }
 
-    printf("%s - INFO: found %s solution\n", __func__, to_string(sol.status));
+    LOG_INFO("Found %s solution", to_string(sol.status));
 
     gsl_vector_free(tc);
     gsl_vector_free(x);
@@ -519,7 +518,7 @@ static solution_t solve_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, c
     size_t cols;
     double t;
 
-    printf("%s - INFO: solving auxiliary problem\n", __func__);
+    LOG_INFO("Solving auxiliary problem");
 
     solution_init(&sol);
     rows = A->size1;
@@ -562,7 +561,7 @@ static solution_t solve_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, c
 
     // Step 4: Process results
     if (aux_sol.status == OPTIMAL && aux_sol.opt_val < 1.0) {
-        printf("%s - INFO: Auxiliary Problem il feasible, extracting solution\n", __func__);
+        LOG_INFO("Auxiliary Problem il feasible, extracting solution");
         sol.status = OPTIMAL;
 
         // Extract feasible point: x = z_opt[:n] - (z_opt[n] - 1)*ones
@@ -573,7 +572,7 @@ static solution_t solve_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, c
             gsl_vector_set(sol.x_opt, i, v);
         }
     } else {
-        printf("%s - WARNING: Auxiliary Problem is Infeasible - status=%d - opt_val=%f - n_iters=%d\n", __func__, sol.status, sol.opt_val, sol.num_iters);
+        LOG_WARNING("Auxiliary Problem is INFEASIBLE - status=%d - opt_val=%f - n_iters=%d", sol.status, sol.opt_val, sol.num_iters);
         sol.status = INFEASIBLE;
     }
 
@@ -605,77 +604,6 @@ static solution_t solve_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, c
  * @warning If \( A \) is rank-deficient or ill-conditioned, the solution may be numerically unstable.
  *          No checks are performed on the condition number of \( A \).
  */
-/*
-static gsl_vector *pinv_solve(const gsl_matrix *A, const gsl_vector *b)
-{
-    gsl_matrix *A_cpy;
-    gsl_vector *b_cpy;
-    gsl_vector *work;
-    gsl_matrix *V;
-    gsl_vector *S;
-    gsl_vector *x;
-    size_t rows;
-    size_t cols;
-    int ret;
-
-    printf("%s - INFO: solving pseudo-inverse\n", __func__);
-
-    rows = A->size1;
-    cols = A->size2;
-
-    // Memory Allocation
-    A_cpy = gsl_matrix_alloc(rows, cols);
-    b_cpy = gsl_vector_alloc(rows);
-    work = gsl_vector_alloc(cols);
-    V = gsl_matrix_alloc(cols, cols);
-    x = gsl_vector_alloc(cols);
-    S = gsl_vector_alloc(cols);
-    if (!A_cpy || !b_cpy || !work || !V || !x || !S) {
-        printf("%s - ERROR: Error allocating memory\n", __func__);
-        if (x) gsl_vector_free(x);
-        x = NULL;
-        goto exit;
-    }
-
-    gsl_matrix_memcpy(A_cpy, A);
-    gsl_vector_memcpy(b_cpy, b);
-
-    // SVD decomposition
-    ret = gsl_linalg_SV_decomp(A_cpy, V, S, work);
-    if (ret != GSL_SUCCESS) {
-        printf("%s - ERROR! SVD decomposition failed: %s\n", __func__, gsl_strerror(ret));
-        goto exit;
-    }
-
-    // Solve x ~= A^ + b
-    ret = gsl_linalg_SV_solve(A_cpy, V, S, b_cpy, x);
-    if (ret != GSL_SUCCESS) {
-        printf("%s - ERROR: SVD solve failed: %s\n", __func__, gsl_strerror(ret));
-        goto exit;
-    }
-
-exit:
-    if (A_cpy)  gsl_matrix_free(A_cpy);
-    if (b_cpy)  gsl_vector_free(b_cpy);
-    if (work)   gsl_vector_free(work);
-    if (V)      gsl_matrix_free(V);
-    if (S)      gsl_vector_free(S);
-
-    if (ret != GSL_SUCCESS) {
-        if (x) gsl_vector_free(x);
-        return NULL;
-    }
-
-    return x;
-}
-*/
-
-#include <gsl/gsl_matrix.h>
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_linalg.h>
-#include <gsl/gsl_blas.h>
-#include <math.h>
-
 static gsl_vector *pinv_solve(const gsl_matrix *A, const gsl_vector *b) {
     size_t M = A->size1;  // Numero di righe
     size_t N = A->size2;  // Numero di colonne
@@ -778,36 +706,36 @@ static solution_t phase_one(const gsl_matrix *A, const gsl_vector *b)
     solution_t sol;
     solution_init(&sol);
 
-    printf("%s - INFO: solving phase I\n", __func__);
+    LOG_INFO("Solving phase I");
 
     // Step 1: Compute initial poitn via pseudo-inverse
     gsl_vector *x;
     x = pinv_solve(A, b);
     if (!x) {
-        printf("%s - WARN: Computation of initial solution FAILED\n", __func__);
+        LOG_ERROR("Computation of feasible starting point FAILED");
         sol.status = FAILURE;
         return sol;
     }
 
     // Step 2: Check feasibility
     if (has_nonpositive_elements(x)) {
-        printf("%s - INFO: x is NOT strictly feasible, constructing auxiliary LP problem\n", __func__);
+        LOG_INFO("X is NOT a strictly feasible starting point, constructing Auxiliary LP Problem");
 
         // Step 3: Solve auxiliary LP if needed
         solution_t aux_sol = solve_auxiliary_lp(A, b, x);
         gsl_vector_free(x);
 
         if (aux_sol.status == OPTIMAL) {
-            printf("%s - INFO: Auxiliary LP problem is feasible\n", __func__);
+            LOG_INFO("Auxiliary LP problem is feasible");
             return aux_sol;
         } else {
-            printf("%s - WARN: Auxiliary LP problem is INFEASIBLE\n", __func__);
+            LOG_WARNING("Auxiliary LP problem is INFEASIBLE");
             sol.status = aux_sol.status;
             solution_free(&aux_sol);
             return sol;
         }
     } else {
-        printf("%s - INFO: x is a strictly feasible point\n", __func__);
+        LOG_INFO("X is a strictly feasible starting point");
         sol.status = OPTIMAL;
         sol.x_opt = x;
         return sol;
@@ -829,11 +757,11 @@ solution_t solve(gsl_matrix *A, gsl_vector *b, gsl_vector *c)
     solution_t global_sol;
     solution_t phase1_sol;
 
-    printf("%s - INFO: solving LP problem\n", __func__);
+    LOG_INFO("Solving LP problem");
 
     phase1_sol = phase_one(A, b);
     if (phase1_sol.status == OPTIMAL) {
-        printf("%s - INFO: phase I got a fesible starting point, computing phase II\n", __func__);
+        LOG_INFO("Phase I got a feasible starting point, computing Phase II");
         global_sol = solve_feasible_start(A, b, c, phase1_sol.x_opt);
         solution_free(&phase1_sol);
         return global_sol;

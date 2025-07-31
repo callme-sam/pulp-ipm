@@ -9,7 +9,7 @@ int main()
     solution_t sol;
     size_t rows;
     size_t cols;
-    
+
     gsl_matrix *A;
     gsl_vector *b;
     gsl_vector *c;
@@ -23,23 +23,16 @@ int main()
 
     generate_lp(&A, &b, &c);
 
-    printf("A:\n");
-    print_matrix(A);
-    printf("b:\n");
-    print_vector(b);
-    printf("c:\n");
-    print_vector(c);
+    log_matrix(LOG_LEVEL_INFO, A, "A");
+    log_vector(LOG_LEVEL_INFO, b, "b");
+    log_vector(LOG_LEVEL_INFO, c, "c");
 
     sol = solve(A, b, c);
 
     if (sol.status == OPTIMAL) {
-        printf("OPTIMAL SOLUTION FOUND!\n");
-        printf("Optimal value: %f\n", sol.opt_val);
-        printf("Optimal solution: ");
-        for (size_t i = 0; i < sol.x_opt->size; i++)
-            printf("%f ", gsl_vector_get(sol.x_opt, i));
-        printf("\n");
-
+        LOG_INFO("OPTIMAL SOLUTION FOUND!");
+        LOG_INFO("Optimal value: %f", sol.opt_val);
+        log_vector(LOG_LEVEL_INFO, sol.x_opt, "x_opt");
     }
 
     gsl_matrix_free(A);

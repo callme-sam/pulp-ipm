@@ -127,12 +127,69 @@ void print_vector(const gsl_vector *v)
     printf("\n");
 }
 
+void log_matrix(LogLevel level, const gsl_matrix *m, const char *name) {
+    if (level > CURRENT_LOG_LEVEL) return;
+
+    const size_t per_elem_len = 24;
+    const size_t header_len = 64;
+    const size_t indent_len = 4;
+    size_t row_len = indent_len + per_elem_len * m->size2 + 2;
+    size_t buf_size = header_len + row_len * m->size1 + 1;
+
+    char *buf = malloc(buf_size);
+    if (!buf) {
+        LOG_ERROR("Failed to allocate memory for matrix logging");
+        return;
+    }
+
+    size_t offset = snprintf(buf, buf_size, "Matrix %s (size = %zux%zu):\n", name, m->size1, m->size2);
+
+    for (size_t i = 0; i < m->size1; ++i) {
+        offset += snprintf(buf + offset, buf_size - offset, "\t[");
+        for (size_t j = 0; j < m->size2; ++j) {
+            offset += snprintf(buf + offset, buf_size - offset, "%g%s",
+                               gsl_matrix_get(m, i, j), (j < m->size2 - 1) ? ", " : "");
+        }
+        offset += snprintf(buf + offset, buf_size - offset, "]\n");
+    }
+    buf[offset] = '\0';
+
+    LOG(level, "%s", buf);
+    free(buf);
+}
+
+void log_vector(LogLevel level, const gsl_vector *v, const char *name) {
+   if (level > CURRENT_LOG_LEVEL) return;
+
+   const size_t per_elem_len = 24;
+    const size_t header_len = 64;
+    size_t buf_size = header_len + per_elem_len * v->size;
+    char *buf = malloc(buf_size);
+    if (!buf) {
+        LOG_ERROR("Failed to allocate memory for vector logging");
+        return;
+    }
+
+    size_t offset = snprintf(buf, buf_size, "Vector %s (size = %zu):\n\t[", name, v->size);
+
+    for (size_t i = 0; i < v->size; ++i) {
+        offset += snprintf(buf + offset, buf_size - offset, "%g%s",
+                           gsl_vector_get(v, i), (i < v->size - 1) ? ", " : "");
+    }
+
+    snprintf(buf + offset, buf_size - offset, "]");
+
+    LOG(level, "%s", buf);
+
+    free(buf);
+}
+
 /**
  * @brief Checks if the minimum value in a GSL vector is <= 0.
- * 
+ *
  * @param[in] x Input vector (must not be NULL).
- * 
- * 
+ *
+ *
  * @return true if any element in x is <= 0, false otherwise.
  */
 bool has_nonpositive_elements(const gsl_vector *v)
@@ -147,7 +204,7 @@ bool has_nonpositive_elements(const gsl_vector *v)
  *
  * @return gsl_vector* A pointer to the newly allocated and initialized GSL vector,
  * or NULL if memory allocation fails.
- * 
+ *
  * @note It is the programmer's responsibility to free the allocated
  * memory using `gsl_vector_free()` when the vector is no longer needed.
  */
@@ -166,7 +223,7 @@ gsl_vector *vector_ones(size_t n)
  *
  * @return gsl_vector* A pointer to the newly allocated GSL vector containing the
  * concatenated elements. Returns NULL if memory allocation fails.
- * 
+ *
  * @note is the programmer's responsibility to free the allocated memory using
  * `gsl_vector_free()` when the returned vector is no longer needed.
  */

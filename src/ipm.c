@@ -213,112 +213,138 @@ static void compute_residuals(const gsl_matrix *A, const gsl_vector *b, const gs
 }
 
 /**
- * @brief
+ * @brief Compute element-wise square of vector x and store in out.
  *
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- *
- *
- * @return int {description}
+ * @param[in]  x   Input vector of size n.
+ * @param[out] out Output vector of size n where squared values are stored.
  */
-static int compute_newton_step(const gsl_matrix *A, const gsl_vector *r_dual, const gsl_vector *r_primal,
-                                const gsl_vector *x, gsl_vector *dx, gsl_vector *dv, gsl_matrix *M, gsl_vector *h_inv,
-                                gsl_permutation *perm)
-{
-    LOG_DEBUG("Computing newton step");
+static void vector_square(const gsl_vector *x, gsl_vector *out) {
+    size_t v_len;
 
-    const size_t n = x->size;
-    const size_t m = r_primal->size;
-
-    // Build h_inv = x^2 (element-wise)
-    for (size_t i = 0; i < n; i++) {
+    v_len = x->size;
+    for (size_t i = 0; i < v_len; i++) {
         double xi = gsl_vector_get(x, i);
-        gsl_vector_set(h_inv, i, xi * xi);
+        gsl_vector_set(out, i, xi * xi);
     }
+}
 
-    // Compute A_hinv_rt = A * (h_inv * r_dual)
-    gsl_vector *A_hinv_rt = gsl_vector_alloc(m);
-    gsl_vector *temp = gsl_vector_alloc(n);
-    gsl_vector_memcpy(temp, r_dual);
-    gsl_vector_mul(temp, h_inv);
-    gsl_blas_dgemv(CblasNoTrans, 1.0, A, temp, 0.0, A_hinv_rt);
+/**
+ * @brief Compute matrix \( M = A \cdot \mathrm{diag}(h_{\text{inv}}) \cdot A^T \).
+ *
+ * @param[in]  A      Constraint matrix of size m×n.
+ * @param[in]  h_inv  Vector of length n representing the diagonal elements.
+ * @param[out] M      Output matrix of size m×m.
+ */
+static void compute_M_matrix(const gsl_matrix *A, const gsl_vector *h_inv, gsl_matrix *M) {
+    size_t rows;
+    size_t cols;
 
-    // Compute M = A * diag(h_inv) * A^T
-    for (size_t i = 0; i < m; i++) {
-        for (size_t j = 0; j < m; j++) {
+    rows = A->size1;
+    cols = A->size2;
+
+    for (size_t i = 0; i < rows; i++) {
+        for (size_t j = 0; j < rows; j++) {
             double sum = 0.0;
-            for (size_t k = 0; k < n; k++) {
-                sum += gsl_matrix_get(A, i, k) *
-                       gsl_vector_get(h_inv, k) *
-                       gsl_matrix_get(A, j, k);
+            for (size_t k = 0; k < cols; k++) {
+                sum += gsl_matrix_get(A, i, k) * gsl_vector_get(h_inv, k) * gsl_matrix_get(A, j, k);
             }
             gsl_matrix_set(M, i, j, sum);
         }
     }
+}
 
-    // Compute rhs = r_primal - A_hinv_rt
+/**
+ * @brief Compute the Newton step for the centering problem.
+ *
+ * @param[in]  A       Constraint matrix (m×n).
+ * @param[in]  r_dual  Dual residual vector (size n).
+ * @param[in]  r_primal Primal residual vector (size m).
+ * @param[in]  x       Current iterate vector (size n).
+ * @param[out] dx      Newton step for primal variables (size n).
+ * @param[out] dv      Newton step for dual variables (size m).
+ * @param[in,out] M    Workspace matrix (m×m).
+ * @param[in,out] h_inv Workspace vector (size n), stores element-wise \( x^2 \).
+ * @param[in,out] perm Workspace permutation for LU decomposition (size m).
+ *
+ * @return int 0 on success, -1 on failure.
+ */
+static int compute_newton_step(const gsl_matrix *A, const gsl_vector *r_dual, const gsl_vector *r_primal,
+                              const gsl_vector *x, gsl_vector *dx, gsl_vector *dv, gsl_matrix *M, gsl_vector *h_inv,
+                              gsl_permutation *perm) {
+    LOG_DEBUG("Computing Newton step");
+
+    size_t n = x->size;
+    size_t m = r_primal->size;
+
+    vector_square(x, h_inv);
+
+    gsl_vector *temp = gsl_vector_alloc(n);
+    gsl_vector *A_hinv_rt = gsl_vector_alloc(m);
     gsl_vector *rhs = gsl_vector_alloc(m);
+
+    // temp = r_dual .* h_inv (element-wise)
+    gsl_vector_memcpy(temp, r_dual);
+    gsl_vector_mul(temp, h_inv);
+
+    // A_hinv_rt = A * temp
+    gsl_blas_dgemv(CblasNoTrans, 1.0, A, temp, 0.0, A_hinv_rt);
+
+    compute_M_matrix(A, h_inv, M);
+
+    // rhs = r_primal - A_hinv_rt
     gsl_vector_memcpy(rhs, r_primal);
     gsl_vector_sub(rhs, A_hinv_rt);
 
     // Solve M*dv = rhs
-    int signum;
-    int status = gsl_linalg_LU_decomp(M, perm, &signum);
+    int signum, status = gsl_linalg_LU_decomp(M, perm, &signum);
     if (status != GSL_SUCCESS) {
-        LOG_ERROR("LU decomp failed: %s\n", gsl_strerror(status));
-        gsl_vector_free(A_hinv_rt);
-        gsl_vector_free(temp);
-        gsl_vector_free(rhs);
-        return -1;
+        LOG_ERROR("LU decomposition failed: %s", gsl_strerror(status));
+        goto cleanup_error;
     }
-
     status = gsl_linalg_LU_solve(M, perm, rhs, dv);
-    gsl_vector_free(A_hinv_rt);
-    gsl_vector_free(temp);
-    gsl_vector_free(rhs);
     if (status != GSL_SUCCESS) {
-        LOG_ERROR("LU solve failed: %s\n", gsl_strerror(status));
-        return -1;
+        LOG_ERROR("LU solve failed: %s", gsl_strerror(status));
+        goto cleanup_error;
     }
 
-    // Compute dx = -h_inv * (r_dual + A^T*dv)
-    gsl_blas_dgemv(CblasTrans, 1.0, A, dv, 0.0, dx);  // dx = A^T*dv
-    gsl_vector_add(dx, r_dual);                        // dx = r_dual + A^T*dv
+    // dx = -h_inv * (r_dual + A^T * dv)
+    gsl_blas_dgemv(CblasTrans, 1.0, A, dv, 0.0, dx); // dx = A^T * dv
+    gsl_vector_add(dx, r_dual);                       // dx += r_dual
     for (size_t i = 0; i < n; i++) {
         double val = -gsl_vector_get(h_inv, i) * gsl_vector_get(dx, i);
         gsl_vector_set(dx, i, val);
     }
 
+    gsl_vector_free(temp);
+    gsl_vector_free(A_hinv_rt);
+    gsl_vector_free(rhs);
     return 0;
+
+cleanup_error:
+    gsl_vector_free(temp);
+    gsl_vector_free(A_hinv_rt);
+    gsl_vector_free(rhs);
+    return -1;
 }
 
+
 /**
- * @brief
+ * @brief Perform backtracking line search to find step size \(t\) that maintains positivity and reduces residual norm.
  *
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
+ * @param[in]  A        Constraint matrix (m×n).
+ * @param[in]  b        Right-hand side vector (size m).
+ * @param[in]  c        Cost vector (size n).
+ * @param[in]  x        Current primal vector (size n).
+ * @param[in]  v        Current dual vector (size m).
+ * @param[in]  dx       Newton step for primal variables (size n).
+ * @param[in]  dv       Newton step for dual variables (size m).
+ * @param[in]  r_norm   Current residual norm.
+ * @param[out] x_new    Output vector for updated primal variables (size n).
+ * @param[out] v_new    Output vector for updated dual variables (size m).
+ * @param[in,out] r_dual Updated dual residual vector (size n).
+ * @param[in,out] r_primal Updated primal residual vector (size m).
  *
- *
- * @return double {description}
+ * @return double The step size \(t\) found by backtracking.
  */
 static double backtracking_line_search(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *c,
                                         const gsl_vector *x, const gsl_vector *v, const gsl_vector *dx,

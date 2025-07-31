@@ -18,7 +18,7 @@ void save_problem_data(const char* filename, const gsl_matrix* A, const gsl_vect
         perror("Error opening file for writing");
         return;
     }
-    
+
     // Write matrix A
     size_t rows = A->size1;
     size_t cols = A->size2;
@@ -30,7 +30,7 @@ void save_problem_data(const char* filename, const gsl_matrix* A, const gsl_vect
             fwrite(&val, sizeof(double), 1, file);
         }
     }
-    
+
     // Write vector b
     size_t size_b = b->size;
     fwrite(&size_b, sizeof(size_t), 1, file);
@@ -38,7 +38,7 @@ void save_problem_data(const char* filename, const gsl_matrix* A, const gsl_vect
         double val = gsl_vector_get(b, i);
         fwrite(&val, sizeof(double), 1, file);
     }
-    
+
     // Write vector c
     size_t size_c = c->size;
     fwrite(&size_c, sizeof(size_t), 1, file);
@@ -46,7 +46,7 @@ void save_problem_data(const char* filename, const gsl_matrix* A, const gsl_vect
         double val = gsl_vector_get(c, i);
         fwrite(&val, sizeof(double), 1, file);
     }
-    
+
     fclose(file);
 }
 
@@ -56,7 +56,7 @@ void load_problem_data(const char* filename, gsl_matrix** A, gsl_vector** b, gsl
         perror("Error opening file for reading");
         return;
     }
-    
+
     // Read matrix A
     size_t rows, cols;
     int ret;
@@ -73,7 +73,7 @@ void load_problem_data(const char* filename, gsl_matrix** A, gsl_vector** b, gsl
             gsl_matrix_set(*A, i, j, val);
         }
     }
-    
+
     // Read vector b
     size_t size_b;
     ret = fread(&size_b, sizeof(size_t), 1, file);
@@ -84,7 +84,7 @@ void load_problem_data(const char* filename, gsl_matrix** A, gsl_vector** b, gsl
         ret = fread(&val, sizeof(double), 1, file);
         gsl_vector_set(*b, i, val);
     }
-    
+
     // Read vector c
     size_t size_c;
     ret = fread(&size_c, sizeof(size_t), 1, file);
@@ -96,26 +96,57 @@ void load_problem_data(const char* filename, gsl_matrix** A, gsl_vector** b, gsl
         if (ret != 1) return;
         gsl_vector_set(*c, i, val);
     }
-    
+
     fclose(file);
 }
 
-void write_solution(const solution_t* sol, const char* val_filename, const char* vec_filename) {
-    if (sol->status == OPTIMAL) {
-        // Write optimal value
-        FILE* val_file = fopen(val_filename, "w");
-        if (val_file) {
-            fprintf(val_file, "%.15f\n", sol->opt_val);
-            fclose(val_file);
-        }
-        
-        // Write solution vector
-        FILE* vec_file = fopen(vec_filename, "w");
-        if (vec_file && sol->x_opt) {
-            for (size_t i = 0; i < sol->x_opt->size; i++) {
-                fprintf(vec_file, "%.15f\n", gsl_vector_get(sol->x_opt, i));
+void write_solution(const solution_t* sol, const char* sts_filename, const char* val_filename, const char* vec_filename) {
+
+    switch (sol->status) {
+        case OPTIMAL:
+        {
+            // Write status value
+            FILE* sts_file = fopen(sts_filename, "w");
+            if (sts_file) {
+                fprintf(sts_file, "optimal\n");
+                fclose(sts_file);
             }
-            fclose(vec_file);
+
+            // Write optimal value
+            FILE* val_file = fopen(val_filename, "w");
+            if (val_file) {
+                fprintf(val_file, "%.15f\n", sol->opt_val);
+                fclose(val_file);
+            }
+
+            // Write solution vector
+            FILE* vec_file = fopen(vec_filename, "w");
+            if (vec_file && sol->x_opt) {
+                for (size_t i = 0; i < sol->x_opt->size; i++) {
+                    fprintf(vec_file, "%.15f\n", gsl_vector_get(sol->x_opt, i));
+                }
+                fclose(vec_file);
+            }
+            break;
+        }
+        case INFEASIBLE:
+        {
+            // Write status value
+            FILE* sts_file = fopen(sts_filename, "w");
+            if (sts_file) {
+                fprintf(sts_file, "infeasible\n");
+                fclose(sts_file);
+            }
+            break;
+        }
+        default:
+        {
+            // Write status value
+            FILE* sts_file = fopen(sts_filename, "w");
+            if (sts_file) {
+                fprintf(sts_file, "failure\n");
+                fclose(sts_file);
+            }
         }
     }
 }

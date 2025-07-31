@@ -21,6 +21,8 @@ typedef struct {
     int num_iters;              // Total Number of iterations
 } solution_t;
 
+const char *to_string(problem_status_e status);
+
 void solution_init(solution_t *sol);
 void solution_free(solution_t *sol);
 int solution_copy(solution_t *dest, const solution_t *src);

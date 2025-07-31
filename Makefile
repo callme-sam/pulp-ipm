@@ -62,7 +62,7 @@ run: $(TARGET)
 
 # Test
 test:
-	$(V)$(MAKE)  -C test test
+	$(V)$(MAKE)  -C test VERBOSE=$(VERBOSE) LOG_LEVEL=$(LOG_LEVEL) test
 
 test_clean:
 	$(V)$(MAKE) -C test clean

@@ -5,6 +5,7 @@
 #include "utils.h"
 
 #define MAX_ITER    (100)
+#define PINV_TOL    (1e-10)
 #define ALPHA       (0.25)
 #define BETA        (0.5)
 #define CONV        (1e-6)
@@ -586,97 +587,95 @@ static solution_t solve_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, c
 }
 
 /**
- * @brief Solves a linear system using the Moore-Penrose pseudo-inverse via SVD.
+ * @brief Solves a linear system using the Moore–Penrose pseudo-inverse via SVD.
  *
- * This function computes the solution to the system \( x = A^+ b \), where \( A^+ \) is the pseudo-inverse
- * of matrix \( A \), calculated using Singular Value Decomposition (SVD).
+ * Computes the minimum-norm least-squares solution to the linear system \( Ax = b \)
+ * using the pseudo-inverse \( A^+ \) obtained via Singular Value Decomposition (SVD).
+ * This method works for both overdetermined and underdetermined systems.
  *
- * @param[in] A Input matrix (size M x N, stored as a GSL matrix). Must be a valid non-NULL matrix.
- * @param[in] b Input vector (size M, stored as a GSL vector). Must be a valid non-NULL vector.
+ * @param[in] A Pointer to a GSL matrix of size M×N representing the system matrix.
+ * @param[in] b Pointer to a GSL vector of size M representing the right-hand side.
  *
- * @return On success: A newly allocated GSL vector containing the solution \( x \) (size N).
- *         On failure: NULL (e.g., due to allocation errors, SVD failure, or invalid dimensions).
+ * @return On success: a newly allocated GSL vector of size N containing the solution \( x = A^+ b \).
+ *         On failure: NULL (e.g., due to memory allocation failure or invalid input).
  *
- * @note The caller is responsible for freeing the returned vector using `gsl_vector_free()`.
- * @warning If \( A \) is rank-deficient or ill-conditioned, the solution may be numerically unstable.
- *          No checks are performed on the condition number of \( A \).
+ * @warning The caller is responsible for freeing the returned vector using `gsl_vector_free()`.
+ * @note The pseudo-inverse is computed via SVD as \( A^+ = V \Sigma^+ U^T \) or \( A^+ = U \Sigma^+ V^T \)
+ *       depending on the shape of A.
  */
 static gsl_vector *pinv_solve(const gsl_matrix *A, const gsl_vector *b) {
-    size_t M = A->size1;  // Numero di righe
-    size_t N = A->size2;  // Numero di colonne
-    double tolerance = 1e-10;
-    gsl_vector *x = gsl_vector_alloc(N);
+    LOG_INFO("Solving pseudo-inverse via SVD");
 
-    if (M >= N) {
-        // Caso M >= N (sovradeterminato)
-        gsl_matrix *A_copy = gsl_matrix_alloc(M, N);
-        gsl_matrix_memcpy(A_copy, A);
+    size_t rows;
+    size_t cols;
 
-        gsl_matrix *V = gsl_matrix_alloc(N, N);
-        gsl_vector *S = gsl_vector_alloc(N);
-        gsl_vector *work = gsl_vector_alloc(N);
+    gsl_matrix *U;
+    gsl_matrix *V;
 
-        gsl_linalg_SV_decomp(A_copy, V, S, work);
+    gsl_vector *work;
+    gsl_vector *tmp;
+    gsl_vector *x;
+    gsl_vector *S;
 
-        // temp = U^T * b
-        gsl_vector *temp = gsl_vector_alloc(N);
-        gsl_blas_dgemv(CblasTrans, 1.0, A_copy, b, 0.0, temp);
+    rows = A->size1;
+    cols = A->size2;
 
-        // Applica pseudoinversa: temp = S⁺ * temp
-        for (size_t i = 0; i < N; i++) {
+    if (rows >= cols) {
+        U = gsl_matrix_alloc(rows, cols);
+        V = gsl_matrix_alloc(cols, cols);
+        work = gsl_vector_alloc(cols);
+        tmp = gsl_vector_alloc(cols);
+        S = gsl_vector_alloc(cols);
+        x = gsl_vector_alloc(cols);
+
+        gsl_matrix_memcpy(U, A);
+        gsl_linalg_SV_decomp(U, V, S, work);
+
+        gsl_blas_dgemv(CblasTrans, 1.0, U, b, 0.0, tmp);    // tmp = Uᵗ b
+
+        // Pseudoinverse: tmp = S⁺ * tmp
+        for (size_t i = 0; i < cols; i++) {
             double s_val = gsl_vector_get(S, i);
-            if (s_val > tolerance) {
-                gsl_vector_set(temp, i, gsl_vector_get(temp, i) / s_val);
+            if (s_val > PINV_TOL) {
+                gsl_vector_set(tmp, i, gsl_vector_get(tmp, i) / s_val);
             } else {
-                gsl_vector_set(temp, i, 0.0);
+                gsl_vector_set(tmp, i, 0.0);
             }
         }
 
-        // x = V * temp
-        gsl_blas_dgemv(CblasNoTrans, 1.0, V, temp, 0.0, x);
-
-        // Libera memoria
-        gsl_matrix_free(A_copy);
-        gsl_matrix_free(V);
-        gsl_vector_free(S);
-        gsl_vector_free(work);
-        gsl_vector_free(temp);
-
+        gsl_blas_dgemv(CblasNoTrans, 1.0, V, tmp, 0.0, x);  // x = V * Σ⁺ * tmp
     } else {
-        // Caso M < N (sottodeterminato)
-        gsl_matrix *AT = gsl_matrix_alloc(N, M);
-        gsl_matrix_transpose_memcpy(AT, A);  // AT = A^T (N x M)
+        // Transpose A and compute SVD of Aᵗ
+        U = gsl_matrix_alloc(cols, rows);
+        V = gsl_matrix_alloc(rows, rows);
+        work = gsl_vector_alloc(rows);
+        tmp = gsl_vector_alloc(rows);
+        S = gsl_vector_alloc(rows);
+        x = gsl_vector_alloc(cols);
 
-        gsl_matrix *V = gsl_matrix_alloc(M, M);
-        gsl_vector *S = gsl_vector_alloc(M);
-        gsl_vector *work = gsl_vector_alloc(M);
+        gsl_matrix_transpose_memcpy(U, A);                  // U = Aᵗ
+        gsl_linalg_SV_decomp(U, V, S, work);
 
-        gsl_linalg_SV_decomp(AT, V, S, work);  // AT ora contiene U (N x M)
+        gsl_blas_dgemv(CblasTrans, 1.0, V, b, 0.0, tmp);    // tmp = Vᵗ b
 
-        // temp1 = V^T * b
-        gsl_vector *temp1 = gsl_vector_alloc(M);
-        gsl_blas_dgemv(CblasTrans, 1.0, V, b, 0.0, temp1);
-
-        // temp1 = S⁺ * temp1
-        for (size_t i = 0; i < M; i++) {
+        // Pseudoinverse: tmp = S⁺ * tmp
+        for (size_t i = 0; i < rows; i++) {
             double s_val = gsl_vector_get(S, i);
-            if (s_val > tolerance) {
-                gsl_vector_set(temp1, i, gsl_vector_get(temp1, i) / s_val);
+            if (s_val > PINV_TOL) {
+                gsl_vector_set(tmp, i, gsl_vector_get(tmp, i) / s_val);
             } else {
-                gsl_vector_set(temp1, i, 0.0);
+                gsl_vector_set(tmp, i, 0.0);
             }
         }
 
-        // x = AT * temp1 (AT contiene U, quindi U * temp1)
-        gsl_blas_dgemv(CblasNoTrans, 1.0, AT, temp1, 0.0, x);
-
-        // Libera memoria
-        gsl_matrix_free(AT);
-        gsl_matrix_free(V);
-        gsl_vector_free(S);
-        gsl_vector_free(work);
-        gsl_vector_free(temp1);
+        gsl_blas_dgemv(CblasNoTrans, 1.0, U, tmp, 0.0, x);  // x = V * Σ⁺ * tmp
     }
+
+    if (work) gsl_vector_free(work);
+    if (tmp) gsl_vector_free(tmp);
+    if (U) gsl_matrix_free(U);
+    if (V) gsl_matrix_free(V);
+    if (S) gsl_vector_free(S);
 
     return x;
 }

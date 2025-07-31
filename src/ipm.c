@@ -492,91 +492,177 @@ static solution_t solve_feasible_start(const gsl_matrix *A, const gsl_vector *b,
 }
 
 /**
- * @brief
+ * @brief Constructs the auxiliary LP problem for Phase I of the interior-point method.
  *
- * @param {type} {name} {description}
- * @param {type} {name} {description}
- * @param {type} {name} {description}
+ * Given a linear system \( Ax = b \), this function constructs an auxiliary LP of the form:
  *
+ * \[
+ * \text{minimize} \quad t \\
+ * \text{subject to} \quad [A, -A\mathbf{1}] \cdot [x; t] = b - A\mathbf{1}
+ * \]
+ * where \( \mathbf{1} \) is a vector of ones. This transformation allows solving an infeasible LP
+ * by embedding it into a feasible auxiliary problem.
  *
- * @return problem_status_e {description}
+ * @param[in]  A   Original constraint matrix of size m×n.
+ * @param[in]  b   Original right-hand side vector of size m.
+ * @param[out] A1  Pointer to the newly allocated auxiliary constraint matrix of size m×(n+1).
+ * @param[out] b1  Pointer to the newly allocated auxiliary right-hand side vector of size m.
+ * @param[out] c1  Pointer to the newly allocated auxiliary cost vector of size (n+1).
+ *
+ * @note The caller is responsible for freeing the output pointers (`*A1`, `*b1`, `*c1`)
+ *       using the appropriate GSL functions.
  */
-static solution_t solve_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *x)
+static void build_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, gsl_matrix **A1, gsl_vector **b1, gsl_vector **c1)
 {
-    solution_t aux_sol;
+    LOG_INFO("Building Auxiliary LP");
+
     gsl_vector *A_ones;
     gsl_vector *ones;
-    gsl_vector *tmp;
-    solution_t sol;
-    gsl_matrix *A1;
-    gsl_vector *b1;
-    gsl_vector *c1;
-    gsl_vector *z0;
     size_t rows;
     size_t cols;
-    double t;
 
-    LOG_INFO("Solving auxiliary problem");
-
-    solution_init(&sol);
     rows = A->size1;
     cols = A->size2;
 
-    // Step 1: Build auxiliary problem
-    A1 = gsl_matrix_alloc(rows, cols + 1);
-    b1 = gsl_vector_alloc(rows);
-    c1 = gsl_vector_alloc(cols + 1);
+    *A1 = gsl_matrix_alloc(rows, cols + 1);
+    *b1 = gsl_vector_alloc(rows);
+    *c1 = gsl_vector_alloc(cols + 1);
     A_ones = gsl_vector_alloc(rows);
-    tmp = gsl_vector_alloc(cols);
 
     // Build A1 = [A, -A*ones]
     ones = vector_ones(cols);
     gsl_blas_dgemv(CblasNoTrans, -1.0, A, ones, 0.0, A_ones);
     for (size_t i = 0; i < rows; i++) {
         for (size_t j = 0; j < cols; j++)
-            gsl_matrix_set(A1, i, j, gsl_matrix_get(A, i, j));
-        gsl_matrix_set(A1, i, cols, gsl_vector_get(A_ones, i));
+            gsl_matrix_set(*A1, i, j, gsl_matrix_get(A, i, j));
+        gsl_matrix_set(*A1, i, cols, gsl_vector_get(A_ones, i));
     }
 
     // Build b1 = b - A*ones
-    gsl_vector_memcpy(b1, b);
-    gsl_blas_daxpy(-1.0, A_ones, b1);
+    gsl_vector_memcpy(*b1, b);
+    gsl_blas_daxpy(-1.0, A_ones, *b1);
 
     // Build c1 = [0, ..., 0, 1]
-    gsl_vector_set_zero(c1);
-    gsl_vector_set(c1, cols, 1.0);
+    gsl_vector_set_zero(*c1);
+    gsl_vector_set(*c1, cols, 1.0);
 
-    // Step 2: Construct initial point
+    if (A_ones) gsl_vector_free(A_ones);
+    if (ones) gsl_vector_free(ones);
+}
+
+/**
+ * @brief Builds the initial point for the auxiliary LP.
+ *
+ * Computes the initial feasible point \( z_0 \in \mathbb{R}^{n+1} \) for the auxiliary LP using:
+ * \[
+ * z_0 = [x + (t - 1) \cdot \mathbf{1}; \; t], \quad t = 2 - \min(x)
+ * \]
+ * This guarantees strict feasibility of the starting point in Phase I.
+ *
+ * @param[in]  x   The original (possibly infeasible) solution vector of size n.
+ * @param[out] z0  Pointer to the newly allocated auxiliary starting point of size (n+1).
+ *
+ * @note The caller is responsible for freeing `*z0` using `gsl_vector_free()`.
+ */
+static void build_auxiliary_initial_point(const gsl_vector *x, gsl_vector **z0)
+{
+    LOG_INFO("Building Auxiliary initial point");
+
+    gsl_vector *ones;
+    gsl_vector *tmp;
+    size_t v_len;
+    double t;
+
+    v_len = x->size;
 
     // Compute z0 = [x + (t-1)*ones, t], with t = 2 - min_x
+    ones = vector_ones(v_len);
+    tmp = gsl_vector_alloc(v_len);
     t = 2.0 - gsl_vector_min(x);
     gsl_vector_memcpy(tmp, x);
     gsl_blas_daxpy(t - 1.0, ones, tmp);
-    z0 = vector_concat(tmp, t);
+    *z0 = vector_concat(tmp, t);
 
-    // Step 3: Solve LP
+    if (ones) gsl_vector_free(ones);
+    if (tmp) gsl_vector_free(tmp);
+}
+
+/**
+ * @brief Extracts a feasible starting point from the auxiliary LP optimal solution.
+ *
+ * Given an optimal solution \( z^* = [x^*; t^*] \in \mathbb{R}^{n+1} \) of the auxiliary LP,
+ * this function returns the corrected feasible vector:
+ * \[
+ * x = x^* - (t^* - 1) \cdot \mathbf{1}
+ * \]
+ *
+ * @param[in] aux_x_opt Optimal solution vector of the auxiliary LP (size n+1).
+ * @param[in] v_len     Dimension of the original LP variables (i.e., n).
+ *
+ * @return A newly allocated GSL vector containing the feasible point for the original LP.
+ *
+ * @warning The caller is responsible for freeing the returned vector using `gsl_vector_free()`.
+ */
+static gsl_vector *get_auxiliary_opt(const gsl_vector *aux_x_opt, const size_t v_len)
+{
+    LOG_INFO("Extracting initial point from Auxiliary optimal solution");
+
+    gsl_vector *x_opt;
+    double t_opt;
+
+    x_opt = gsl_vector_alloc(v_len);
+    t_opt = gsl_vector_get(aux_x_opt, v_len);
+    for (size_t i = 0; i < v_len; i++) {
+        double val = gsl_vector_get(aux_x_opt, i) - (t_opt - 1.0);
+        gsl_vector_set(x_opt, i, val);
+    }
+
+    return x_opt;
+}
+
+/**
+ * @brief Solves the auxiliary LP problem to find a feasible starting point for the original LP.
+ *
+ * Constructs the auxiliary LP using `build_auxiliary_lp`, generates an initial feasible point with
+ * `build_auxiliary_initial_point`, then solves the problem using `solve_feasible_start()`.
+ * If the auxiliary LP is feasible and the optimal value is less than 1.0, a feasible point is extracted.
+ *
+ * @param[in] A Constraint matrix of the original LP (size m×n).
+ * @param[in] b Right-hand side vector of the original LP (size m).
+ * @param[in] x Infeasible solution estimate (size n), used to initialize the auxiliary LP.
+ *
+ * @return A `solution_t` structure containing:
+ *         - status: `OPTIMAL` if a feasible point was found, `INFEASIBLE` otherwise.
+ *         - x_opt:  Feasible starting point (if status is `OPTIMAL`).
+ *         - Diagnostics (e.g., number of iterations, final value, etc.).
+ *
+ * @note The returned solution must be freed using `solution_free()` when no longer needed.
+ */
+static solution_t solve_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *x)
+{
+    LOG_INFO("Solving auxiliary problem");
+
+    solution_t aux_sol;
+    solution_t sol;
+    gsl_matrix *A1;
+    gsl_vector *b1;
+    gsl_vector *c1;
+    gsl_vector *z0;
+
+    solution_init(&sol);
+    build_auxiliary_lp(A, b, &A1, &b1, &c1);
+    build_auxiliary_initial_point(x, &z0);
+
     aux_sol = solve_feasible_start(A1, b1, c1, z0);
-
-    // Step 4: Process results
     if (aux_sol.status == OPTIMAL && aux_sol.opt_val < 1.0) {
         LOG_INFO("Auxiliary Problem il feasible, extracting solution");
         sol.status = OPTIMAL;
-
-        // Extract feasible point: x = z_opt[:n] - (z_opt[n] - 1)*ones
-        sol.x_opt = gsl_vector_alloc(cols);
-        double t_opt = gsl_vector_get(aux_sol.x_opt, cols);
-        for (size_t i = 0; i < cols; i++) {
-            double v = gsl_vector_get(aux_sol.x_opt, i) - (t_opt - 1.0);
-            gsl_vector_set(sol.x_opt, i, v);
-        }
+        sol.x_opt = get_auxiliary_opt(aux_sol.x_opt, A->size2);
     } else {
         LOG_WARNING("Auxiliary Problem is INFEASIBLE - status=%d - opt_val=%f - n_iters=%d", sol.status, sol.opt_val, sol.num_iters);
         sol.status = INFEASIBLE;
     }
 
-    if (A_ones) gsl_vector_free(A_ones);
-    if (ones) gsl_vector_free(ones);
-    if (tmp) gsl_vector_free(tmp);
     if (A1) gsl_matrix_free(A1);
     if (b1) gsl_vector_free(b1);
     if (c1) gsl_vector_free(c1);
@@ -603,19 +689,18 @@ static solution_t solve_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, c
  * @note The pseudo-inverse is computed via SVD as \( A^+ = V \Sigma^+ U^T \) or \( A^+ = U \Sigma^+ V^T \)
  *       depending on the shape of A.
  */
-static gsl_vector *pinv_solve(const gsl_matrix *A, const gsl_vector *b) {
+static gsl_vector *pinv_solve(const gsl_matrix *A, const gsl_vector *b)
+{
     LOG_INFO("Solving pseudo-inverse via SVD");
-
-    size_t rows;
-    size_t cols;
-
-    gsl_matrix *U;
-    gsl_matrix *V;
 
     gsl_vector *work;
     gsl_vector *tmp;
     gsl_vector *x;
     gsl_vector *S;
+    gsl_matrix *U;
+    gsl_matrix *V;
+    size_t rows;
+    size_t cols;
 
     rows = A->size1;
     cols = A->size2;
@@ -701,10 +786,11 @@ static solution_t phase_one(const gsl_matrix *A, const gsl_vector *b)
     LOG_INFO("Solving phase I");
 
     solution_t sol;
+    gsl_vector *x;
+
     solution_init(&sol);
 
     // Step 1: Compute initial point via pseudo-inverse
-    gsl_vector *x;
     x = pinv_solve(A, b);
     if (!x) {
         LOG_ERROR("Computation of feasible starting point FAILED");

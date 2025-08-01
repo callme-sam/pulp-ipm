@@ -11,15 +11,44 @@
 
 #include "utils.h"
 
+/**
+ * @brief Generate a random number uniformly in the interval [0, 1).
+ *
+ * @param[in] rng Pointer to a GSL random number generator.
+ * @return A random double sampled from the uniform distribution in [0, 1).
+ */
 static double rand_uniform(gsl_rng *rng)
 {
     return gsl_rng_uniform(rng);
 }
 
+/**
+ * @brief Generate a random number from the standard normal distribution.
+ *
+ * @param[in] rng Pointer to a GSL random number generator.
+ * @return A random double sampled from N(0, 1).
+ */
 static double rand_normal(gsl_rng *rng) {
     return gsl_ran_gaussian(rng, 1.0);
 }
 
+/**
+ * @brief Generate a random feasible linear program (LP).
+ *
+ * Fills the provided matrices/vectors with data such that the LP:
+ *     minimize cᵀx  subject to A x = b, x > 0
+ * has a known feasible solution.
+ *
+ * The matrix A is generated with normally distributed entries, the vector c
+ * with uniform values in [0,1), and b is computed as b = A * x₀, where x₀ is a
+ * strictly positive vector.
+ *
+ * @param[out] A Pointer to an allocated GSL matrix (m × n) to be filled.
+ * @param[out] b Pointer to an allocated GSL vector (m) to be filled.
+ * @param[out] c Pointer to an allocated GSL vector (n) to be filled.
+ *
+ * @note A, b, and c must be allocated before calling this function.
+ */
 void generate_lp(gsl_matrix **A, gsl_vector **b, gsl_vector **c)
 {
     gsl_vector *tmp;
@@ -67,6 +96,13 @@ void generate_lp(gsl_matrix **A, gsl_vector **b, gsl_vector **c)
     gsl_rng_free(rng);
 }
 
+/**
+ * @brief Fill a GSL matrix with a deterministic pattern based on indices.
+ *
+ * Each element M(i,j) is set to (i * j + j).
+ *
+ * @param[out] M Pointer to a GSL matrix to be filled.
+ */
 void fill_matrix(gsl_matrix *M)
 {
     size_t rows;
@@ -85,6 +121,13 @@ void fill_matrix(gsl_matrix *M)
     }
 }
 
+/**
+ * @brief Fill a GSL vector with sequential values starting from 0.
+ *
+ * Each element v[i] is set to i.
+ *
+ * @param[out] v Pointer to a GSL vector to be filled.
+ */
 void fill_vector(gsl_vector *v)
 {
     size_t v_len;
@@ -100,6 +143,13 @@ void fill_vector(gsl_vector *v)
 
 }
 
+/**
+ * @brief Print a GSL matrix to standard output in human-readable format.
+ *
+ * Each row is printed on a new line with values formatted to 2 decimal places.
+ *
+ * @param[in] M Pointer to the GSL matrix to print.
+ */
 void print_matrix(const gsl_matrix *M)
 {
     size_t rows;
@@ -116,6 +166,13 @@ void print_matrix(const gsl_matrix *M)
     }
 }
 
+/**
+ * @brief Print a GSL vector to standard output in human-readable format.
+ *
+ * All elements are printed on a single line, formatted to 2 decimal places.
+ *
+ * @param[in] v Pointer to the GSL vector to print.
+ */
 void print_vector(const gsl_vector *v)
 {
     size_t v_len;
@@ -126,6 +183,31 @@ void print_vector(const gsl_vector *v)
         printf("%.2f ", gsl_vector_get(v, i));
     printf("\n");
 }
+
+/**
+ * @brief Logs the contents of a GSL matrix with a custom label.
+ *
+ * This function prints the contents of a GSL matrix to the log output,
+ * formatted as a human-readable 2D array with a descriptive label.
+ * Each row is printed on a separate line, with elements separated by commas:
+ * ```
+ * Matrix <name> (size = rows x cols):
+ *     [a_00, a_01, ..., a_0n]
+ *     [a_10, a_11, ..., a_1n]
+ *     ...
+ * ```
+ * Logging only occurs if the specified `level` is less than or equal to `CURRENT_LOG_LEVEL`.
+ *
+ * @param[in] level Logging severity level (e.g., DEBUG, INFO, ERROR).
+ * @param[in] m Pointer to the GSL matrix to be logged.
+ * @param[in] name Descriptive name of the matrix, shown in the log output.
+ *
+ * @note The function dynamically allocates memory to format the matrix string.
+ *       It automatically releases the memory before returning.
+ *
+ * @warning If memory allocation fails, the function logs an error and returns without printing.
+ */
+void log_matrix(LogLevel level, const gsl_matrix *m, const char *name);
 
 void log_matrix(LogLevel level, const gsl_matrix *m, const char *name) {
     if (level > CURRENT_LOG_LEVEL) return;
@@ -158,6 +240,26 @@ void log_matrix(LogLevel level, const gsl_matrix *m, const char *name) {
     free(buf);
 }
 
+/**
+ * @brief Logs the contents of a GSL vector with a custom label.
+ *
+ * This function formats and prints the elements of a GSL vector using a specified log level.
+ * The vector is printed in the format:
+ * ```
+ * Vector <name> (size = n):
+ *     [e0, e1, ..., en]
+ * ```
+ * Logging only occurs if the specified level is less than or equal to the current log level.
+ *
+ * @param[in] level Logging severity level
+ * @param[in] v Pointer to the GSL vector to be printed.
+ * @param[in] name Descriptive name to be shown in the log output.
+ *
+ * @note The function allocates temporary memory to construct the formatted log message.
+ *       It automatically frees the memory before returning.
+ *
+ * @warning If memory allocation fails, the function logs an error and exits early.
+ */
 void log_vector(LogLevel level, const gsl_vector *v, const char *name) {
    if (level > CURRENT_LOG_LEVEL) return;
 

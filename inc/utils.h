@@ -3,8 +3,8 @@
 
 #include <stdbool.h>
 
-#include <gsl/gsl_matrix.h>
-#include <gsl/gsl_vector.h>
+#include "matrix.h"
+#include "vector.h"
 
 typedef enum {
     LOG_LEVEL_QUIET   = 0,
@@ -39,20 +39,22 @@ typedef enum {
 #define LOG_INFO(fmt, ...)    LOG(LOG_LEVEL_INFO,    fmt, ##__VA_ARGS__)
 #define LOG_DEBUG(fmt, ...)   LOG(LOG_LEVEL_DEBUG,   fmt, ##__VA_ARGS__)
 
-void fill_matrix(gsl_matrix *M);
-void fill_vector(gsl_vector *v);
+void fill_matrix(matrix_t *M);
+void fill_vector(vector_t *v);
 
-void print_matrix(const gsl_matrix *A);
-void print_vector(const gsl_vector *v);
+void print_matrix(const matrix_t *A);
+void print_vector(const vector_t *v);
 
-void log_matrix(LogLevel level, const gsl_matrix *m, const char *name);
-void log_vector(LogLevel level, const gsl_vector *v, const char *name);
+void log_matrix(LogLevel level, const matrix_t *m, const char *name);
+void log_vector(LogLevel level, const vector_t *v, const char *name);
 
-bool has_nonpositive_elements(const gsl_vector *v);
+const char* err_to_str(const int err);
 
-gsl_vector *vector_ones(size_t n);
-gsl_vector *vector_concat(const gsl_vector *v, double b);
+bool has_nonpositive_elements(const vector_t *v);
 
-void generate_lp(gsl_matrix **A, gsl_vector **b, gsl_vector **c);
+vector_t *vector_ones(size_t n);
+vector_t *vector_concat(const vector_t *v, double b);
+
+void generate_lp(matrix_t **A, vector_t **b, vector_t **c);
 
 #endif  /* UTILS_H_ */

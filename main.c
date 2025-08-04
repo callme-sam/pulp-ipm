@@ -10,16 +10,16 @@ int main()
     size_t rows;
     size_t cols;
 
-    gsl_matrix *A;
-    gsl_vector *b;
-    gsl_vector *c;
+    matrix_t *A;
+    vector_t *b;
+    vector_t *c;
 
     rows = 5;
     cols = 7;
 
-    A = gsl_matrix_alloc(rows, cols);
-    b = gsl_vector_alloc(rows);
-    c = gsl_vector_alloc(cols);
+    A = matrix_alloc(rows, cols);
+    b = vector_alloc(rows);
+    c = vector_alloc(cols);
 
     generate_lp(&A, &b, &c);
 
@@ -35,9 +35,9 @@ int main()
         log_vector(LOG_LEVEL_INFO, sol.x_opt, "x_opt");
     }
 
-    gsl_matrix_free(A);
-    gsl_vector_free(b);
-    gsl_vector_free(c);
+    matrix_free(A);
+    vector_free(b);
+    vector_free(c);
 
     return 0;
 }

@@ -1,9 +1,13 @@
+BIN_DIR = build
+DATA_DIR = $(BIN_DIR)/test_data
+SRC_DIR = ../src
+INC_DIR = ../inc
+
 CC = gcc
 CFLAGS = -I../inc -Wall -O3
 LDFLAGS = -lgsl -lgslcblas -lm
 
-BIN_DIR = build
-DATA_DIR = $(BIN_DIR)/test_data
+SRC = $(wildcard $(SRC_DIR)/*.c)
 
 # Makefile Verbosity
 VERBOSE ?= 0
@@ -21,10 +25,10 @@ CFLAGS += -DCURRENT_LOG_LEVEL=$(LOG_LEVEL)
 
 all: $(BIN_DIR)/generate_test_data $(BIN_DIR)/test_lp_solver
 
-$(BIN_DIR)/generate_test_data: generate_test_data.c test_utils.c ../src/utils.c | $(BIN_DIR)
+$(BIN_DIR)/generate_test_data: generate_test_data.c test_utils.c $(SRC) | $(BIN_DIR)
 	$(V)$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-$(BIN_DIR)/test_lp_solver: test_lp_solvers.c test_utils.c ../src/ipm.c ../src/utils.c | $(BIN_DIR)
+$(BIN_DIR)/test_lp_solver: test_lp_solvers.c test_utils.c $(SRC) | $(BIN_DIR)
 	$(V)$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(BIN_DIR):

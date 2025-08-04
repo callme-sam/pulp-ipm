@@ -9,9 +9,9 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    gsl_matrix* A = NULL;
-    gsl_vector* b = NULL;
-    gsl_vector* c = NULL;
+    matrix_t* A = NULL;
+    vector_t* b = NULL;
+    vector_t* c = NULL;
 
     // Load problem data
     load_problem_data(argv[1], &A, &b, &c);
@@ -29,9 +29,9 @@ int main(int argc, char* argv[]) {
 
     // Clean up
     solution_free(&sol);
-    if (A) gsl_matrix_free(A);
-    if (b) gsl_vector_free(b);
-    if (c) gsl_vector_free(c);
+    if (A) matrix_free(A);
+    if (b) vector_free(b);
+    if (c) vector_free(c);
 
     return EXIT_SUCCESS;
 }

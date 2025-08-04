@@ -3,34 +3,9 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include <gsl/gsl_linalg.h>
-#include <gsl/gsl_matrix.h>
-#include <gsl/gsl_randist.h>
-#include <gsl/gsl_rng.h>
-#include <gsl/gsl_vector.h>
-
+#include "blas.h"
+#include "rng.h"
 #include "utils.h"
-
-/**
- * @brief Generate a random number uniformly in the interval [0, 1).
- *
- * @param[in] rng Pointer to a GSL random number generator.
- * @return A random double sampled from the uniform distribution in [0, 1).
- */
-static double rand_uniform(gsl_rng *rng)
-{
-    return gsl_rng_uniform(rng);
-}
-
-/**
- * @brief Generate a random number from the standard normal distribution.
- *
- * @param[in] rng Pointer to a GSL random number generator.
- * @return A random double sampled from N(0, 1).
- */
-static double rand_normal(gsl_rng *rng) {
-    return gsl_ran_gaussian(rng, 1.0);
-}
 
 /**
  * @brief Generate a random feasible linear program (LP).
@@ -49,9 +24,9 @@ static double rand_normal(gsl_rng *rng) {
  *
  * @note A, b, and c must be allocated before calling this function.
  */
-void generate_lp(gsl_matrix **A, gsl_vector **b, gsl_vector **c)
+void generate_lp(matrix_t **A, vector_t **b, vector_t **c)
 {
-    gsl_vector *tmp;
+    vector_t *tmp;
     size_t rows;
     size_t cols;
 
@@ -60,40 +35,40 @@ void generate_lp(gsl_matrix **A, gsl_vector **b, gsl_vector **c)
 
     assert(rows <= cols);
 
-    tmp = gsl_vector_alloc(cols);
+    tmp = vector_alloc(cols);
 
-    gsl_rng_env_setup();
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    gsl_rng_set(rng, time(NULL));
+    rng_env_setup();
+    rng_t *rng = rng_alloc();
+    rng_set(rng, time(NULL));
 
     for (size_t i = 0; i < rows; i++) {
         for (size_t j = 0; j < cols; j++) {
             double val = rand_normal(rng);
-            gsl_matrix_set(*A, i, j, val);
+            matrix_set(*A, i, j, val);
         }
     }
 
     // A[0, :] = rand + 0.1 (boundedness)
     for (size_t j = 0; j < cols; j++) {
         double val = rand_uniform(rng) + 0.1;
-        gsl_matrix_set(*A, 0, j, val);
+        matrix_set(*A, 0, j, val);
     }
 
     for (size_t j = 0; j < cols; j++) {
         double val = rand_uniform(rng) + 0.01;
-        gsl_vector_set(tmp, j, val);
+        vector_set(tmp, j, val);
     }
 
     // b = A * tmp
-    gsl_blas_dgemv(CblasNoTrans, 1.0, *A, tmp, 0.0, *b);
+    blas_dgemv(BLAS_NO_TRANSPOSE, 1.0, *A, tmp, 0.0, *b);
 
     // c ~ U(0,1)
     for (size_t j = 0; j < cols; j++) {
-        gsl_vector_set(*c, j, rand_uniform(rng));
+        vector_set(*c, j, rand_uniform(rng));
     }
 
-    gsl_vector_free(tmp);
-    gsl_rng_free(rng);
+    vector_free(tmp);
+    rng_free(rng);
 }
 
 /**
@@ -103,7 +78,7 @@ void generate_lp(gsl_matrix **A, gsl_vector **b, gsl_vector **c)
  *
  * @param[out] M Pointer to a GSL matrix to be filled.
  */
-void fill_matrix(gsl_matrix *M)
+void fill_matrix(matrix_t *M)
 {
     size_t rows;
     size_t cols;
@@ -116,7 +91,7 @@ void fill_matrix(gsl_matrix *M)
             double val;
 
             val = (i * j) + j;
-            gsl_matrix_set(M, i, j, val);
+            matrix_set(M, i, j, val);
         }
     }
 }
@@ -128,7 +103,7 @@ void fill_matrix(gsl_matrix *M)
  *
  * @param[out] v Pointer to a GSL vector to be filled.
  */
-void fill_vector(gsl_vector *v)
+void fill_vector(vector_t *v)
 {
     size_t v_len;
 
@@ -138,7 +113,7 @@ void fill_vector(gsl_vector *v)
         double val;
 
         val = i;
-        gsl_vector_set(v, i, val);
+        vector_set(v, i, val);
     }
 
 }
@@ -150,7 +125,7 @@ void fill_vector(gsl_vector *v)
  *
  * @param[in] M Pointer to the GSL matrix to print.
  */
-void print_matrix(const gsl_matrix *M)
+void print_matrix(const matrix_t *M)
 {
     size_t rows;
     size_t cols;
@@ -160,7 +135,7 @@ void print_matrix(const gsl_matrix *M)
 
     for (size_t i = 0; i < rows; i++) {
         for (size_t j = 0; j < cols; j++) {
-            printf("%.2f ", gsl_matrix_get(M, i, j));
+            printf("%.2f ", matrix_get(M, i, j));
         }
         printf("\n");
     }
@@ -173,14 +148,14 @@ void print_matrix(const gsl_matrix *M)
  *
  * @param[in] v Pointer to the GSL vector to print.
  */
-void print_vector(const gsl_vector *v)
+void print_vector(const vector_t *v)
 {
     size_t v_len;
 
     v_len = v->size;
 
     for (size_t i = 0; i < v_len; i++)
-        printf("%.2f ", gsl_vector_get(v, i));
+        printf("%.2f ", vector_get(v, i));
     printf("\n");
 }
 
@@ -207,9 +182,9 @@ void print_vector(const gsl_vector *v)
  *
  * @warning If memory allocation fails, the function logs an error and returns without printing.
  */
-void log_matrix(LogLevel level, const gsl_matrix *m, const char *name);
+void log_matrix(LogLevel level, const matrix_t *m, const char *name);
 
-void log_matrix(LogLevel level, const gsl_matrix *m, const char *name) {
+void log_matrix(LogLevel level, const matrix_t *m, const char *name) {
     if (level > CURRENT_LOG_LEVEL) return;
 
     const size_t per_elem_len = 24;
@@ -230,7 +205,7 @@ void log_matrix(LogLevel level, const gsl_matrix *m, const char *name) {
         offset += snprintf(buf + offset, buf_size - offset, "\t[");
         for (size_t j = 0; j < m->size2; ++j) {
             offset += snprintf(buf + offset, buf_size - offset, "%g%s",
-                               gsl_matrix_get(m, i, j), (j < m->size2 - 1) ? ", " : "");
+                               matrix_get(m, i, j), (j < m->size2 - 1) ? ", " : "");
         }
         offset += snprintf(buf + offset, buf_size - offset, "]\n");
     }
@@ -260,7 +235,7 @@ void log_matrix(LogLevel level, const gsl_matrix *m, const char *name) {
  *
  * @warning If memory allocation fails, the function logs an error and exits early.
  */
-void log_vector(LogLevel level, const gsl_vector *v, const char *name) {
+void log_vector(LogLevel level, const vector_t *v, const char *name) {
    if (level > CURRENT_LOG_LEVEL) return;
 
    const size_t per_elem_len = 24;
@@ -276,7 +251,7 @@ void log_vector(LogLevel level, const gsl_vector *v, const char *name) {
 
     for (size_t i = 0; i < v->size; ++i) {
         offset += snprintf(buf + offset, buf_size - offset, "%g%s",
-                           gsl_vector_get(v, i), (i < v->size - 1) ? ", " : "");
+                           vector_get(v, i), (i < v->size - 1) ? ", " : "");
     }
 
     snprintf(buf + offset, buf_size - offset, "]");
@@ -294,9 +269,9 @@ void log_vector(LogLevel level, const gsl_vector *v, const char *name) {
  *
  * @return true if any element in x is <= 0, false otherwise.
  */
-bool has_nonpositive_elements(const gsl_vector *v)
+bool has_nonpositive_elements(const vector_t *v)
 {
-    return gsl_vector_min(v) <= 0.0;
+    return vector_min(v) <= 0.0;
 }
 
 /**
@@ -304,16 +279,16 @@ bool has_nonpositive_elements(const gsl_vector *v)
  *
  * @param n The size of the vector to be created.
  *
- * @return gsl_vector* A pointer to the newly allocated and initialized GSL vector,
+ * @return vector_t* A pointer to the newly allocated and initialized GSL vector,
  * or NULL if memory allocation fails.
  *
  * @note It is the programmer's responsibility to free the allocated
- * memory using `gsl_vector_free()` when the vector is no longer needed.
+ * memory using `vector_free()` when the vector is no longer needed.
  */
-gsl_vector *vector_ones(size_t n)
+vector_t *vector_ones(size_t n)
 {
-    gsl_vector *ones = gsl_vector_alloc(n);
-    gsl_vector_set_all(ones, 1.0);
+    vector_t *ones = vector_alloc(n);
+    vector_set_all(ones, 1.0);
     return ones;
 }
 
@@ -323,26 +298,31 @@ gsl_vector *vector_ones(size_t n)
  * @param v A pointer to the input GSL vector. This vector is not modified.
  * @param b The double-precision scalar value to append to the vector.
  *
- * @return gsl_vector* A pointer to the newly allocated GSL vector containing the
+ * @return vector_t* A pointer to the newly allocated GSL vector containing the
  * concatenated elements. Returns NULL if memory allocation fails.
  *
  * @note is the programmer's responsibility to free the allocated memory using
- * `gsl_vector_free()` when the returned vector is no longer needed.
+ * `vector_free()` when the returned vector is no longer needed.
  */
-gsl_vector *vector_concat(const gsl_vector *v, double b)
+vector_t *vector_concat(const vector_t *v, double b)
 {
-    gsl_vector *res;
+    vector_t *res;
     size_t v_len;
 
     v_len = v->size;
-    res = gsl_vector_alloc(v_len + 1);
+    res = vector_alloc(v_len + 1);
 
     if (res == NULL)
         return NULL;
 
     for (size_t i = 0; i < v_len; i++)
-        gsl_vector_set(res, i, gsl_vector_get(v, i));
-    gsl_vector_set(res, v_len, b);
+        vector_set(res, i, vector_get(v, i));
+    vector_set(res, v_len, b);
 
     return res;
+}
+
+const char* err_to_str(const int err)
+{
+    return gsl_strerror(err);
 }

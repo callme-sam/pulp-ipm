@@ -1,7 +1,8 @@
-#include <gsl/gsl_blas.h>
-#include <gsl/gsl_linalg.h>
+#include <math.h>
 
+#include "blas.h"
 #include "ipm.h"
+#include "linalg.h"
 #include "utils.h"
 
 #define MAX_ITER    (100)
@@ -85,22 +86,22 @@ void solution_free(solution_t *sol) {
     if (!sol) return;
 
     if (sol->x_opt) {
-        gsl_vector_free(sol->x_opt);
+        vector_free(sol->x_opt);
         sol->x_opt = NULL;
     }
 
     if (sol->v_opt) {
-        gsl_vector_free(sol->v_opt);
+        vector_free(sol->v_opt);
         sol->v_opt = NULL;
     }
 
     if (sol->duality_gaps) {
-        gsl_vector_free(sol->duality_gaps);
+        vector_free(sol->duality_gaps);
         sol->duality_gaps = NULL;
     }
 
     if (sol->newton_steps) {
-        gsl_vector_free(sol->newton_steps);
+        vector_free(sol->newton_steps);
         sol->newton_steps = NULL;
     }
 
@@ -138,27 +139,27 @@ int solution_copy(solution_t *dest, const solution_t *src) {
 
     // Copy vectors (deep copy)
     if (src->x_opt) {
-        dest->x_opt = gsl_vector_alloc(src->x_opt->size);
+        dest->x_opt = vector_alloc(src->x_opt->size);
         if (!dest->x_opt) goto error;
-        gsl_vector_memcpy(dest->x_opt, src->x_opt);
+        vector_memcpy(dest->x_opt, src->x_opt);
     }
 
     if (src->v_opt) {
-        dest->v_opt = gsl_vector_alloc(src->v_opt->size);
+        dest->v_opt = vector_alloc(src->v_opt->size);
         if (!dest->v_opt) goto error;
-        gsl_vector_memcpy(dest->v_opt, src->v_opt);
+        vector_memcpy(dest->v_opt, src->v_opt);
     }
 
     if (src->duality_gaps) {
-        dest->duality_gaps = gsl_vector_alloc(src->duality_gaps->size);
+        dest->duality_gaps = vector_alloc(src->duality_gaps->size);
         if (!dest->duality_gaps) goto error;
-        gsl_vector_memcpy(dest->duality_gaps, src->duality_gaps);
+        vector_memcpy(dest->duality_gaps, src->duality_gaps);
     }
 
     if (src->newton_steps) {
-        dest->newton_steps = gsl_vector_alloc(src->newton_steps->size);
+        dest->newton_steps = vector_alloc(src->newton_steps->size);
         if (!dest->newton_steps) goto error;
-        gsl_vector_memcpy(dest->newton_steps, src->newton_steps);
+        vector_memcpy(dest->newton_steps, src->newton_steps);
     }
 
     return 0;
@@ -189,8 +190,8 @@ error:
  * @param[out] r_primal Output primal residual vector (size m).
  * @param[out] r_norm   Output scalar for the combined residual norm.
  */
-static void compute_residuals(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *c, const gsl_vector *x,
-                                const gsl_vector *v, gsl_vector *r_dual, gsl_vector *r_primal, double *r_norm)
+static void compute_residuals(const matrix_t *A, const vector_t *b, const vector_t *c, const vector_t *x,
+                                const vector_t *v, vector_t *r_dual, vector_t *r_primal, double *r_norm)
 {
     LOG_DEBUG("Computing residuals\n");
 
@@ -198,17 +199,17 @@ static void compute_residuals(const gsl_matrix *A, const gsl_vector *b, const gs
 
     // r_dual = c - 1/x + A^T*v
     for (size_t i = 0; i < n; i++)
-        gsl_vector_set(r_dual, i, gsl_vector_get(c, i) - 1.0/gsl_vector_get(x, i));
-    gsl_blas_dgemv(CblasTrans, 1.0, A, v, 1.0, r_dual);
+        vector_set(r_dual, i, vector_get(c, i) - 1.0/vector_get(x, i));
+    blas_dgemv(BLAS_TRANSPOSE, 1.0, A, v, 1.0, r_dual);
 
     // r_primal = A*x - b
-    gsl_blas_dgemv(CblasNoTrans, 1.0, A, x, 0.0, r_primal);
-    gsl_vector_sub(r_primal, b);
+    blas_dgemv(BLAS_NO_TRANSPOSE, 1.0, A, x, 0.0, r_primal);
+    vector_sub(r_primal, b);
 
     // Compute ||r_dual||^2 + ||r_primal||^2
     double norm_dual, norm_primal;
-    gsl_blas_ddot(r_dual, r_dual, &norm_dual);
-    gsl_blas_ddot(r_primal, r_primal, &norm_primal);
+    blas_ddot(r_dual, r_dual, &norm_dual);
+    blas_ddot(r_primal, r_primal, &norm_primal);
     *r_norm = sqrt(norm_dual + norm_primal);
 }
 
@@ -218,13 +219,13 @@ static void compute_residuals(const gsl_matrix *A, const gsl_vector *b, const gs
  * @param[in]  x   Input vector of size n.
  * @param[out] out Output vector of size n where squared values are stored.
  */
-static void vector_square(const gsl_vector *x, gsl_vector *out) {
+static void vector_square(const vector_t *x, vector_t *out) {
     size_t v_len;
 
     v_len = x->size;
     for (size_t i = 0; i < v_len; i++) {
-        double xi = gsl_vector_get(x, i);
-        gsl_vector_set(out, i, xi * xi);
+        double xi = vector_get(x, i);
+        vector_set(out, i, xi * xi);
     }
 }
 
@@ -235,7 +236,7 @@ static void vector_square(const gsl_vector *x, gsl_vector *out) {
  * @param[in]  h_inv  Vector of length n representing the diagonal elements.
  * @param[out] M      Output matrix of size m×m.
  */
-static void compute_M_matrix(const gsl_matrix *A, const gsl_vector *h_inv, gsl_matrix *M) {
+static void compute_M_matrix(const matrix_t *A, const vector_t *h_inv, matrix_t *M) {
     size_t rows;
     size_t cols;
 
@@ -246,9 +247,9 @@ static void compute_M_matrix(const gsl_matrix *A, const gsl_vector *h_inv, gsl_m
         for (size_t j = 0; j < rows; j++) {
             double sum = 0.0;
             for (size_t k = 0; k < cols; k++) {
-                sum += gsl_matrix_get(A, i, k) * gsl_vector_get(h_inv, k) * gsl_matrix_get(A, j, k);
+                sum += matrix_get(A, i, k) * vector_get(h_inv, k) * matrix_get(A, j, k);
             }
-            gsl_matrix_set(M, i, j, sum);
+            matrix_set(M, i, j, sum);
         }
     }
 }
@@ -268,9 +269,9 @@ static void compute_M_matrix(const gsl_matrix *A, const gsl_vector *h_inv, gsl_m
  *
  * @return int 0 on success, -1 on failure.
  */
-static int compute_newton_step(const gsl_matrix *A, const gsl_vector *r_dual, const gsl_vector *r_primal,
-                              const gsl_vector *x, gsl_vector *dx, gsl_vector *dv, gsl_matrix *M, gsl_vector *h_inv,
-                              gsl_permutation *perm) {
+static int compute_newton_step(const matrix_t *A, const vector_t *r_dual, const vector_t *r_primal,
+                              const vector_t *x, vector_t *dx, vector_t *dv, matrix_t *M, vector_t *h_inv,
+                              permutation_t *perm) {
     LOG_DEBUG("Computing Newton step");
 
     size_t n = x->size;
@@ -278,52 +279,52 @@ static int compute_newton_step(const gsl_matrix *A, const gsl_vector *r_dual, co
 
     vector_square(x, h_inv);
 
-    gsl_vector *temp = gsl_vector_alloc(n);
-    gsl_vector *A_hinv_rt = gsl_vector_alloc(m);
-    gsl_vector *rhs = gsl_vector_alloc(m);
+    vector_t *temp = vector_alloc(n);
+    vector_t *A_hinv_rt = vector_alloc(m);
+    vector_t *rhs = vector_alloc(m);
 
     // temp = r_dual .* h_inv (element-wise)
-    gsl_vector_memcpy(temp, r_dual);
-    gsl_vector_mul(temp, h_inv);
+    vector_memcpy(temp, r_dual);
+    vector_mul(temp, h_inv);
 
     // A_hinv_rt = A * temp
-    gsl_blas_dgemv(CblasNoTrans, 1.0, A, temp, 0.0, A_hinv_rt);
+    blas_dgemv(BLAS_NO_TRANSPOSE, 1.0, A, temp, 0.0, A_hinv_rt);
 
     compute_M_matrix(A, h_inv, M);
 
     // rhs = r_primal - A_hinv_rt
-    gsl_vector_memcpy(rhs, r_primal);
-    gsl_vector_sub(rhs, A_hinv_rt);
+    vector_memcpy(rhs, r_primal);
+    vector_sub(rhs, A_hinv_rt);
 
     // Solve M*dv = rhs
-    int signum, status = gsl_linalg_LU_decomp(M, perm, &signum);
-    if (status != GSL_SUCCESS) {
-        LOG_ERROR("LU decomposition failed: %s", gsl_strerror(status));
+    int signum, status = linalg_lu_decomp(M, perm, &signum);
+    if (status != 0) {
+        LOG_ERROR("LU decomposition failed: %s", err_to_str(status));
         goto cleanup_error;
     }
-    status = gsl_linalg_LU_solve(M, perm, rhs, dv);
-    if (status != GSL_SUCCESS) {
-        LOG_ERROR("LU solve failed: %s", gsl_strerror(status));
+    status = linalg_lu_solve(M, perm, rhs, dv);
+    if (status != 0) {
+        LOG_ERROR("LU solve failed: %s", err_to_str(status));
         goto cleanup_error;
     }
 
     // dx = -h_inv * (r_dual + A^T * dv)
-    gsl_blas_dgemv(CblasTrans, 1.0, A, dv, 0.0, dx); // dx = A^T * dv
-    gsl_vector_add(dx, r_dual);                       // dx += r_dual
+    blas_dgemv(BLAS_TRANSPOSE, 1.0, A, dv, 0.0, dx); // dx = A^T * dv
+    vector_add(dx, r_dual);                         // dx += r_dual
     for (size_t i = 0; i < n; i++) {
-        double val = -gsl_vector_get(h_inv, i) * gsl_vector_get(dx, i);
-        gsl_vector_set(dx, i, val);
+        double val = -vector_get(h_inv, i) * vector_get(dx, i);
+        vector_set(dx, i, val);
     }
 
-    gsl_vector_free(temp);
-    gsl_vector_free(A_hinv_rt);
-    gsl_vector_free(rhs);
+    vector_free(temp);
+    vector_free(A_hinv_rt);
+    vector_free(rhs);
     return 0;
 
 cleanup_error:
-    gsl_vector_free(temp);
-    gsl_vector_free(A_hinv_rt);
-    gsl_vector_free(rhs);
+    vector_free(temp);
+    vector_free(A_hinv_rt);
+    vector_free(rhs);
     return -1;
 }
 
@@ -346,10 +347,10 @@ cleanup_error:
  *
  * @return double The step size \(t\) found by backtracking.
  */
-static double backtracking_line_search(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *c,
-                                        const gsl_vector *x, const gsl_vector *v, const gsl_vector *dx,
-                                        const gsl_vector *dv, double r_norm, gsl_vector *x_new, gsl_vector *v_new,
-                                        gsl_vector *r_dual, gsl_vector *r_primal)
+static double backtracking_line_search(const matrix_t *A, const vector_t *b, const vector_t *c,
+                                        const vector_t *x, const vector_t *v, const vector_t *dx,
+                                        const vector_t *dv, double r_norm, vector_t *x_new, vector_t *v_new,
+                                        vector_t *r_dual, vector_t *r_primal)
 {
     LOG_DEBUG("Backtracking line search");
     const size_t n = x->size;
@@ -359,8 +360,8 @@ static double backtracking_line_search(const gsl_matrix *A, const gsl_vector *b,
     while (1) {
         bool positive = true;
         for (size_t i = 0; i < n; i++) {
-            double xi = gsl_vector_get(x, i);
-            double dxi = gsl_vector_get(dx, i);
+            double xi = vector_get(x, i);
+            double dxi = vector_get(dx, i);
             if (xi + t * dxi <= 0) {
                 positive = false;
                 break;
@@ -373,12 +374,12 @@ static double backtracking_line_search(const gsl_matrix *A, const gsl_vector *b,
     // Step 2: reduce residual norm
     while (1) {
         // x_new = x + t*dx
-        gsl_vector_memcpy(x_new, x);
-        gsl_blas_daxpy(t, dx, x_new);
+        vector_memcpy(x_new, x);
+        blas_daxpy(t, dx, x_new);
 
         // v_new = v + t*dv
-        gsl_vector_memcpy(v_new, v);
-        gsl_blas_daxpy(t, dv, v_new);
+        vector_memcpy(v_new, v);
+        blas_daxpy(t, dv, v_new);
 
         // Compute new residuals
         double r_norm_new;
@@ -405,7 +406,7 @@ static double backtracking_line_search(const gsl_matrix *A, const gsl_vector *b,
  *
  * @return solution_e
  */
-static solution_t solve_centering(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *c, gsl_vector *x0)
+static solution_t solve_centering(const matrix_t *A, const vector_t *b, const vector_t *c, vector_t *x0)
 {
     LOG_DEBUG("Solving centering");
 
@@ -416,20 +417,20 @@ static solution_t solve_centering(const gsl_matrix *A, const gsl_vector *b, cons
     const size_t cols = A->size2;
     int iter;
 
-    gsl_vector *x = gsl_vector_alloc(cols);
-    gsl_vector *v = gsl_vector_alloc(rows);
-    gsl_vector *r_dual = gsl_vector_alloc(cols);
-    gsl_vector *r_primal = gsl_vector_alloc(rows);
-    gsl_vector *dx = gsl_vector_alloc(cols);
-    gsl_vector *dv = gsl_vector_alloc(rows);
-    gsl_vector *x_new = gsl_vector_alloc(cols);
-    gsl_vector *v_new = gsl_vector_alloc(rows);
-    gsl_matrix *M = gsl_matrix_alloc(rows, rows);
-    gsl_vector *work = gsl_vector_alloc(cols);
-    gsl_permutation *perm = gsl_permutation_alloc(rows);
+    vector_t *x = vector_alloc(cols);
+    vector_t *v = vector_alloc(rows);
+    vector_t *r_dual = vector_alloc(cols);
+    vector_t *r_primal = vector_alloc(rows);
+    vector_t *dx = vector_alloc(cols);
+    vector_t *dv = vector_alloc(rows);
+    vector_t *x_new = vector_alloc(cols);
+    vector_t *v_new = vector_alloc(rows);
+    matrix_t *M = matrix_alloc(rows, rows);
+    vector_t *work = vector_alloc(cols);
+    permutation_t *perm = permutation_alloc(rows);
 
-    gsl_vector_memcpy(x, x0);
-    gsl_vector_set_zero(v);
+    vector_memcpy(x, x0);
+    vector_set_zero(v);
 
     for (iter = 0; iter < MAX_ITER; iter++) {
         double r_norm;
@@ -438,11 +439,11 @@ static solution_t solve_centering(const gsl_matrix *A, const gsl_vector *b, cons
 
         if (r_norm <= CONV) {
             sol.status = OPTIMAL;
-            sol.x_opt = gsl_vector_alloc(cols);
-            sol.v_opt = gsl_vector_alloc(rows);
+            sol.x_opt = vector_alloc(cols);
+            sol.v_opt = vector_alloc(rows);
             if (sol.x_opt && sol.v_opt) {
-                gsl_vector_memcpy(sol.x_opt, x);
-                gsl_vector_memcpy(sol.v_opt, v);
+                vector_memcpy(sol.x_opt, x);
+                vector_memcpy(sol.v_opt, v);
             }
             sol.num_iters = iter + 1;
             break;
@@ -454,25 +455,25 @@ static solution_t solve_centering(const gsl_matrix *A, const gsl_vector *b, cons
 
         backtracking_line_search(A, b, c, x, v, dx, dv, r_norm, x_new, v_new, r_dual, r_primal);
 
-        gsl_vector_memcpy(x, x_new);
-        gsl_vector_memcpy(v, v_new);
+        vector_memcpy(x, x_new);
+        vector_memcpy(v, v_new);
     }
 
     if (iter == MAX_ITER) {
         sol.status = FAILURE;
     }
 
-    if (x) gsl_vector_free(x);
-    if (v) gsl_vector_free(v);
-    if (r_dual) gsl_vector_free(r_dual);
-    if (r_primal) gsl_vector_free(r_primal);
-    if (dx) gsl_vector_free(dx);
-    if (dv) gsl_vector_free(dv);
-    if (x_new) gsl_vector_free(x_new);
-    if (v_new) gsl_vector_free(v_new);
-    if (M) gsl_matrix_free(M);
-    if (work) gsl_vector_free(work);
-    if (perm) gsl_permutation_free(perm);
+    if (x) vector_free(x);
+    if (v) vector_free(v);
+    if (r_dual) vector_free(r_dual);
+    if (r_primal) vector_free(r_primal);
+    if (dx) vector_free(dx);
+    if (dv) vector_free(dv);
+    if (x_new) vector_free(x_new);
+    if (v_new) vector_free(v_new);
+    if (M) matrix_free(M);
+    if (work) vector_free(work);
+    if (perm) permutation_free(perm);
 
     return sol;
     return sol;
@@ -506,30 +507,30 @@ static solution_t solve_centering(const gsl_matrix *A, const gsl_vector *b, cons
  * @note The caller is responsible for freeing the fields of the returned solution with `solution_free()`.
  * @warning If the centering step fails during any iteration, the solver terminates early with FAILURE status.
  */
-static solution_t solve_feasible_start(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *c, const gsl_vector *x0)
+static solution_t solve_feasible_start(const matrix_t *A, const vector_t *b, const vector_t *c, const vector_t *x0)
 {
     LOG_INFO("solving feasible start");
 
     solution_t sol;
-    gsl_vector *tc;
-    gsl_vector *x;
+    vector_t *tc;
+    vector_t *x;
     double gap;
     double t;
 
     solution_init(&sol);
-    sol.duality_gaps = gsl_vector_alloc(MAX_ITER);
-    sol.newton_steps = gsl_vector_alloc(MAX_ITER);
-    tc = gsl_vector_alloc(c->size);
-    x = gsl_vector_alloc(x0->size);
-    gsl_vector_memcpy(x, x0);
+    sol.duality_gaps = vector_alloc(MAX_ITER);
+    sol.newton_steps = vector_alloc(MAX_ITER);
+    tc = vector_alloc(c->size);
+    x = vector_alloc(x0->size);
+    vector_memcpy(x, x0);
     t = 1.0;
 
     for (sol.num_iters = 0; sol.num_iters < MAX_ITER; sol.num_iters++) {
 
         // Solve centering problem with current t
         solution_t center_sol;
-        gsl_vector_memcpy(tc, c);
-        gsl_vector_scale(tc, t);    // tc = t * c
+        vector_memcpy(tc, c);
+        vector_scale(tc, t);    // tc = t * c
         center_sol = solve_centering(A, b, tc, x);
         if (center_sol.status != OPTIMAL) {
             LOG_ERROR("Centering step failed at iteration %d", sol.num_iters);
@@ -538,21 +539,21 @@ static solution_t solve_feasible_start(const gsl_matrix *A, const gsl_vector *b,
         }
 
         // Update solution
-        gsl_vector_memcpy(x, center_sol.x_opt);
+        vector_memcpy(x, center_sol.x_opt);
 
         // Compute and store duality gap and newton steps
         gap = A->size2 / t;
-        gsl_vector_set(sol.duality_gaps, sol.num_iters, gap);
-        gsl_vector_set(sol.newton_steps, sol.num_iters, center_sol.num_iters);
+        vector_set(sol.duality_gaps, sol.num_iters, gap);
+        vector_set(sol.newton_steps, sol.num_iters, center_sol.num_iters);
 
         // Check convergence
         if (gap < TOL) {
             sol.status = OPTIMAL;
-            sol.x_opt = gsl_vector_alloc(x->size);
-            sol.v_opt = gsl_vector_alloc(center_sol.v_opt->size);
-            gsl_vector_memcpy(sol.x_opt, x);
-            gsl_vector_memcpy(sol.v_opt, center_sol.v_opt);
-            gsl_blas_ddot(c, x, &sol.opt_val);
+            sol.x_opt = vector_alloc(x->size);
+            sol.v_opt = vector_alloc(center_sol.v_opt->size);
+            vector_memcpy(sol.x_opt, x);
+            vector_memcpy(sol.v_opt, center_sol.v_opt);
+            blas_ddot(c, x, &sol.opt_val);
             solution_free(&center_sol);
             break;
         }
@@ -563,8 +564,8 @@ static solution_t solve_feasible_start(const gsl_matrix *A, const gsl_vector *b,
 
     LOG_INFO("Found %s solution", to_string(sol.status));
 
-    gsl_vector_free(tc);
-    gsl_vector_free(x);
+    vector_free(tc);
+    vector_free(x);
 
     return sol;
 }
@@ -590,42 +591,42 @@ static solution_t solve_feasible_start(const gsl_matrix *A, const gsl_vector *b,
  * @note The caller is responsible for freeing the output pointers (`*A1`, `*b1`, `*c1`)
  *       using the appropriate GSL functions.
  */
-static void build_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, gsl_matrix **A1, gsl_vector **b1, gsl_vector **c1)
+static void build_auxiliary_lp(const matrix_t *A, const vector_t *b, matrix_t **A1, vector_t **b1, vector_t **c1)
 {
     LOG_INFO("Building Auxiliary LP");
 
-    gsl_vector *A_ones;
-    gsl_vector *ones;
+    vector_t *A_ones;
+    vector_t *ones;
     size_t rows;
     size_t cols;
 
     rows = A->size1;
     cols = A->size2;
 
-    *A1 = gsl_matrix_alloc(rows, cols + 1);
-    *b1 = gsl_vector_alloc(rows);
-    *c1 = gsl_vector_alloc(cols + 1);
-    A_ones = gsl_vector_alloc(rows);
+    *A1 = matrix_alloc(rows, cols + 1);
+    *b1 = vector_alloc(rows);
+    *c1 = vector_alloc(cols + 1);
+    A_ones = vector_alloc(rows);
 
     // Build A1 = [A, -A*ones]
     ones = vector_ones(cols);
-    gsl_blas_dgemv(CblasNoTrans, -1.0, A, ones, 0.0, A_ones);
+    blas_dgemv(BLAS_NO_TRANSPOSE, -1.0, A, ones, 0.0, A_ones);
     for (size_t i = 0; i < rows; i++) {
         for (size_t j = 0; j < cols; j++)
-            gsl_matrix_set(*A1, i, j, gsl_matrix_get(A, i, j));
-        gsl_matrix_set(*A1, i, cols, gsl_vector_get(A_ones, i));
+            matrix_set(*A1, i, j, matrix_get(A, i, j));
+        matrix_set(*A1, i, cols, vector_get(A_ones, i));
     }
 
     // Build b1 = b - A*ones
-    gsl_vector_memcpy(*b1, b);
-    gsl_blas_daxpy(-1.0, A_ones, *b1);
+    vector_memcpy(*b1, b);
+    blas_daxpy(-1.0, A_ones, *b1);
 
     // Build c1 = [0, ..., 0, 1]
-    gsl_vector_set_zero(*c1);
-    gsl_vector_set(*c1, cols, 1.0);
+    vector_set_zero(*c1);
+    vector_set(*c1, cols, 1.0);
 
-    if (A_ones) gsl_vector_free(A_ones);
-    if (ones) gsl_vector_free(ones);
+    if (A_ones) vector_free(A_ones);
+    if (ones) vector_free(ones);
 }
 
 /**
@@ -640,14 +641,14 @@ static void build_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, gsl_mat
  * @param[in]  x   The original (possibly infeasible) solution vector of size n.
  * @param[out] z0  Pointer to the newly allocated auxiliary starting point of size (n+1).
  *
- * @note The caller is responsible for freeing `*z0` using `gsl_vector_free()`.
+ * @note The caller is responsible for freeing `*z0` using `vector_free()`.
  */
-static void build_auxiliary_initial_point(const gsl_vector *x, gsl_vector **z0)
+static void build_auxiliary_initial_point(const vector_t *x, vector_t **z0)
 {
     LOG_INFO("Building Auxiliary initial point");
 
-    gsl_vector *ones;
-    gsl_vector *tmp;
+    vector_t *ones;
+    vector_t *tmp;
     size_t v_len;
     double t;
 
@@ -655,14 +656,14 @@ static void build_auxiliary_initial_point(const gsl_vector *x, gsl_vector **z0)
 
     // Compute z0 = [x + (t-1)*ones, t], with t = 2 - min_x
     ones = vector_ones(v_len);
-    tmp = gsl_vector_alloc(v_len);
-    t = 2.0 - gsl_vector_min(x);
-    gsl_vector_memcpy(tmp, x);
-    gsl_blas_daxpy(t - 1.0, ones, tmp);
+    tmp = vector_alloc(v_len);
+    t = 2.0 - vector_min(x);
+    vector_memcpy(tmp, x);
+    blas_daxpy(t - 1.0, ones, tmp);
     *z0 = vector_concat(tmp, t);
 
-    if (ones) gsl_vector_free(ones);
-    if (tmp) gsl_vector_free(tmp);
+    if (ones) vector_free(ones);
+    if (tmp) vector_free(tmp);
 }
 
 /**
@@ -679,20 +680,20 @@ static void build_auxiliary_initial_point(const gsl_vector *x, gsl_vector **z0)
  *
  * @return A newly allocated GSL vector containing the feasible point for the original LP.
  *
- * @warning The caller is responsible for freeing the returned vector using `gsl_vector_free()`.
+ * @warning The caller is responsible for freeing the returned vector using `vector_free()`.
  */
-static gsl_vector *get_auxiliary_opt(const gsl_vector *aux_x_opt, const size_t v_len)
+static vector_t *get_auxiliary_opt(const vector_t *aux_x_opt, const size_t v_len)
 {
     LOG_INFO("Extracting initial point from Auxiliary optimal solution");
 
-    gsl_vector *x_opt;
+    vector_t *x_opt;
     double t_opt;
 
-    x_opt = gsl_vector_alloc(v_len);
-    t_opt = gsl_vector_get(aux_x_opt, v_len);
+    x_opt = vector_alloc(v_len);
+    t_opt = vector_get(aux_x_opt, v_len);
     for (size_t i = 0; i < v_len; i++) {
-        double val = gsl_vector_get(aux_x_opt, i) - (t_opt - 1.0);
-        gsl_vector_set(x_opt, i, val);
+        double val = vector_get(aux_x_opt, i) - (t_opt - 1.0);
+        vector_set(x_opt, i, val);
     }
 
     return x_opt;
@@ -716,16 +717,16 @@ static gsl_vector *get_auxiliary_opt(const gsl_vector *aux_x_opt, const size_t v
  *
  * @note The returned solution must be freed using `solution_free()` when no longer needed.
  */
-static solution_t solve_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, const gsl_vector *x)
+static solution_t solve_auxiliary_lp(const matrix_t *A, const vector_t *b, const vector_t *x)
 {
     LOG_INFO("Solving auxiliary problem");
 
     solution_t aux_sol;
     solution_t sol;
-    gsl_matrix *A1;
-    gsl_vector *b1;
-    gsl_vector *c1;
-    gsl_vector *z0;
+    matrix_t *A1;
+    vector_t *b1;
+    vector_t *c1;
+    vector_t *z0;
 
     solution_init(&sol);
     build_auxiliary_lp(A, b, &A1, &b1, &c1);
@@ -741,10 +742,10 @@ static solution_t solve_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, c
         sol.status = INFEASIBLE;
     }
 
-    if (A1) gsl_matrix_free(A1);
-    if (b1) gsl_vector_free(b1);
-    if (c1) gsl_vector_free(c1);
-    if (z0) gsl_vector_free(z0);
+    if (A1) matrix_free(A1);
+    if (b1) vector_free(b1);
+    if (c1) vector_free(c1);
+    if (z0) vector_free(z0);
     solution_free(&aux_sol);
 
     return sol;
@@ -763,20 +764,20 @@ static solution_t solve_auxiliary_lp(const gsl_matrix *A, const gsl_vector *b, c
  * @return On success: a newly allocated GSL vector of size N containing the solution \( x = A^+ b \).
  *         On failure: NULL (e.g., due to memory allocation failure or invalid input).
  *
- * @warning The caller is responsible for freeing the returned vector using `gsl_vector_free()`.
+ * @warning The caller is responsible for freeing the returned vector using `vector_free()`.
  * @note The pseudo-inverse is computed via SVD as \( A^+ = V \Sigma^+ U^T \) or \( A^+ = U \Sigma^+ V^T \)
  *       depending on the shape of A.
  */
-static gsl_vector *pinv_solve(const gsl_matrix *A, const gsl_vector *b)
+static vector_t *pinv_solve(const matrix_t *A, const vector_t *b)
 {
     LOG_INFO("Solving pseudo-inverse via SVD");
 
-    gsl_vector *work;
-    gsl_vector *tmp;
-    gsl_vector *x;
-    gsl_vector *S;
-    gsl_matrix *U;
-    gsl_matrix *V;
+    vector_t *work;
+    vector_t *tmp;
+    vector_t *x;
+    vector_t *S;
+    matrix_t *U;
+    matrix_t *V;
     size_t rows;
     size_t cols;
 
@@ -784,61 +785,61 @@ static gsl_vector *pinv_solve(const gsl_matrix *A, const gsl_vector *b)
     cols = A->size2;
 
     if (rows >= cols) {
-        U = gsl_matrix_alloc(rows, cols);
-        V = gsl_matrix_alloc(cols, cols);
-        work = gsl_vector_alloc(cols);
-        tmp = gsl_vector_alloc(cols);
-        S = gsl_vector_alloc(cols);
-        x = gsl_vector_alloc(cols);
+        U = matrix_alloc(rows, cols);
+        V = matrix_alloc(cols, cols);
+        work = vector_alloc(cols);
+        tmp = vector_alloc(cols);
+        S = vector_alloc(cols);
+        x = vector_alloc(cols);
 
-        gsl_matrix_memcpy(U, A);
-        gsl_linalg_SV_decomp(U, V, S, work);
+        matrix_memcpy(U, A);
+        linalg_sv_decomp(U, V, S, work);
 
-        gsl_blas_dgemv(CblasTrans, 1.0, U, b, 0.0, tmp);    // tmp = Uᵗ b
+        blas_dgemv(BLAS_TRANSPOSE, 1.0, U, b, 0.0, tmp);    // tmp = Uᵗ b
 
         // Pseudoinverse: tmp = S⁺ * tmp
         for (size_t i = 0; i < cols; i++) {
-            double s_val = gsl_vector_get(S, i);
+            double s_val = vector_get(S, i);
             if (s_val > PINV_TOL) {
-                gsl_vector_set(tmp, i, gsl_vector_get(tmp, i) / s_val);
+                vector_set(tmp, i, vector_get(tmp, i) / s_val);
             } else {
-                gsl_vector_set(tmp, i, 0.0);
+                vector_set(tmp, i, 0.0);
             }
         }
 
-        gsl_blas_dgemv(CblasNoTrans, 1.0, V, tmp, 0.0, x);  // x = V * Σ⁺ * tmp
+        blas_dgemv(BLAS_NO_TRANSPOSE, 1.0, V, tmp, 0.0, x);  // x = V * Σ⁺ * tmp
     } else {
         // Transpose A and compute SVD of Aᵗ
-        U = gsl_matrix_alloc(cols, rows);
-        V = gsl_matrix_alloc(rows, rows);
-        work = gsl_vector_alloc(rows);
-        tmp = gsl_vector_alloc(rows);
-        S = gsl_vector_alloc(rows);
-        x = gsl_vector_alloc(cols);
+        U = matrix_alloc(cols, rows);
+        V = matrix_alloc(rows, rows);
+        work = vector_alloc(rows);
+        tmp = vector_alloc(rows);
+        S = vector_alloc(rows);
+        x = vector_alloc(cols);
 
-        gsl_matrix_transpose_memcpy(U, A);                  // U = Aᵗ
-        gsl_linalg_SV_decomp(U, V, S, work);
+        matrix_transpose_memcpy(U, A);                  // U = Aᵗ
+        linalg_sv_decomp(U, V, S, work);
 
-        gsl_blas_dgemv(CblasTrans, 1.0, V, b, 0.0, tmp);    // tmp = Vᵗ b
+        blas_dgemv(BLAS_TRANSPOSE, 1.0, V, b, 0.0, tmp);    // tmp = Vᵗ b
 
         // Pseudoinverse: tmp = S⁺ * tmp
         for (size_t i = 0; i < rows; i++) {
-            double s_val = gsl_vector_get(S, i);
+            double s_val = vector_get(S, i);
             if (s_val > PINV_TOL) {
-                gsl_vector_set(tmp, i, gsl_vector_get(tmp, i) / s_val);
+                vector_set(tmp, i, vector_get(tmp, i) / s_val);
             } else {
-                gsl_vector_set(tmp, i, 0.0);
+                vector_set(tmp, i, 0.0);
             }
         }
 
-        gsl_blas_dgemv(CblasNoTrans, 1.0, U, tmp, 0.0, x);  // x = V * Σ⁺ * tmp
+        blas_dgemv(BLAS_NO_TRANSPOSE, 1.0, U, tmp, 0.0, x);  // x = V * Σ⁺ * tmp
     }
 
-    if (work) gsl_vector_free(work);
-    if (tmp) gsl_vector_free(tmp);
-    if (U) gsl_matrix_free(U);
-    if (V) gsl_matrix_free(V);
-    if (S) gsl_vector_free(S);
+    if (work) vector_free(work);
+    if (tmp) vector_free(tmp);
+    if (U) matrix_free(U);
+    if (V) matrix_free(V);
+    if (S) vector_free(S);
 
     return x;
 }
@@ -859,12 +860,12 @@ static gsl_vector *pinv_solve(const gsl_matrix *A, const gsl_vector *b)
  *         - x_opt: Feasible starting point (if status == OPTIMAL)
  *         - Diagnostics fields may be empty
  */
-static solution_t phase_one(const gsl_matrix *A, const gsl_vector *b)
+static solution_t phase_one(const matrix_t *A, const vector_t *b)
 {
     LOG_INFO("Solving phase I");
 
     solution_t sol;
-    gsl_vector *x;
+    vector_t *x;
 
     solution_init(&sol);
 
@@ -889,11 +890,11 @@ static solution_t phase_one(const gsl_matrix *A, const gsl_vector *b)
         LOG_INFO("X is a strictly feasible starting point");
 
         sol.status = OPTIMAL;
-        sol.x_opt = gsl_vector_alloc(x->size);
-        gsl_vector_memcpy(sol.x_opt, x);
+        sol.x_opt = vector_alloc(x->size);
+        vector_memcpy(sol.x_opt, x);
     }
 
-    if (x) gsl_vector_free(x);
+    if (x) vector_free(x);
     return sol;
 }
 
@@ -915,7 +916,7 @@ static solution_t phase_one(const gsl_matrix *A, const gsl_vector *b)
  *  - `x_opt`: the optimal solution found (if any).
  *  - `value`: the optimal objective function value (if computed).
  */
-solution_t solve(gsl_matrix *A, gsl_vector *b, gsl_vector *c)
+solution_t solve(matrix_t *A, vector_t *b, vector_t *c)
 {
     solution_t phase1_sol;
     solution_t phase2_sol;

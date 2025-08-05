@@ -7,9 +7,12 @@
 
 typedef struct
 {
-    gsl_matrix *gsl;
+    double *data;
     size_t size1;
     size_t size2;
+
+    // TODO: remove
+    gsl_matrix *gsl;
 } matrix_t;
 
 matrix_t *matrix_alloc(const size_t n1, const size_t n2);

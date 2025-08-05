@@ -394,6 +394,9 @@ static double backtracking_line_search(const matrix_t *A, const vector_t *b, con
         }
     }
 
+    if (t <= 1e-12)
+        LOG_WARNING("Warning: Line search reached minimum step size");
+
     return t;
 }
 
@@ -437,6 +440,11 @@ static solution_t solve_centering(const matrix_t *A, const vector_t *b, const ve
         double r_norm;
 
         compute_residuals(A, b, c, x, v, r_dual, r_primal, &r_norm);
+        if (!isfinite(r_norm)) {
+            LOG_ERROR("Residual norm is non-finite");
+            sol.status = FAILURE;
+            break;
+        }
 
         if (r_norm <= CONV) {
             sol.status = OPTIMAL;
@@ -891,6 +899,12 @@ static solution_t phase_one(const matrix_t *A, const vector_t *b)
         solution_free(&aux_sol);
     } else {
         LOG_INFO("X is a strictly feasible starting point");
+        double x_min = vector_min(x);
+        if (x_min <= 1e-6) {
+            LOG_WARNING("Really close to boundary! Adding safety gap");
+            double safety = fmax(1e-3, 0.1 * x_min);
+            vector_add_constant(x, safety);
+        }
 
         sol.status = OPTIMAL;
         sol.x_opt = vector_alloc(x->size);

@@ -27,6 +27,7 @@ int vector_mul(vector_t *a, const vector_t *b);
 int vector_sub(vector_t *a, const vector_t *b);
 int vector_add(vector_t *a, const vector_t *b);
 int vector_scale(vector_t *a, const double x);
+int vector_add_constant(vector_t *a, const double x);
 
 double vector_min(const vector_t *v);
 

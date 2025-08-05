@@ -108,6 +108,17 @@ int vector_scale(vector_t *a, const double x)
     return 0;
 }
 
+int vector_add_constant(vector_t *a, const double x)
+{
+    size_t a_len;
+
+    a_len = a->size;
+    for (size_t i = 0; i < a_len; i++)
+        a->data[i] = a->data[i] + x;
+
+    return 0;
+}
+
 int vector_memcpy(vector_t *dst, const vector_t *src)
 {
     size_t src_len;

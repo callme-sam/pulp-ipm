@@ -261,67 +261,6 @@ void log_vector(LogLevel level, const vector_t *v, const char *name) {
     free(buf);
 }
 
-/**
- * @brief Checks if the minimum value in a GSL vector is <= 0.
- *
- * @param[in] x Input vector (must not be NULL).
- *
- *
- * @return true if any element in x is <= 0, false otherwise.
- */
-bool has_nonpositive_elements(const vector_t *v)
-{
-    return vector_min(v) <= 0.0;
-}
-
-/**
- * @brief Creates a new GSL vector of a specified size and initializes all its elements to 1.0.
- *
- * @param n The size of the vector to be created.
- *
- * @return vector_t* A pointer to the newly allocated and initialized GSL vector,
- * or NULL if memory allocation fails.
- *
- * @note It is the programmer's responsibility to free the allocated
- * memory using `vector_free()` when the vector is no longer needed.
- */
-vector_t *vector_ones(size_t n)
-{
-    vector_t *ones = vector_alloc(n);
-    vector_set_all(ones, 1.0);
-    return ones;
-}
-
- /**
- * @brief Concatenates a scalar value to the end of a GSL vector.
- *
- * @param v A pointer to the input GSL vector. This vector is not modified.
- * @param b The double-precision scalar value to append to the vector.
- *
- * @return vector_t* A pointer to the newly allocated GSL vector containing the
- * concatenated elements. Returns NULL if memory allocation fails.
- *
- * @note is the programmer's responsibility to free the allocated memory using
- * `vector_free()` when the returned vector is no longer needed.
- */
-vector_t *vector_concat(const vector_t *v, double b)
-{
-    vector_t *res;
-    size_t v_len;
-
-    v_len = v->size;
-    res = vector_alloc(v_len + 1);
-
-    if (res == NULL)
-        return NULL;
-
-    for (size_t i = 0; i < v_len; i++)
-        vector_set(res, i, vector_get(v, i));
-    vector_set(res, v_len, b);
-
-    return res;
-}
-
 const char* err_to_str(const int err)
 {
     return gsl_strerror(err);

@@ -1,14 +1,18 @@
 #ifndef VECTOR_H_
 #define VECTOR_H_
 
+#include <stdbool.h>
 #include <stdlib.h>
 
 #include <gsl/gsl_vector.h>
 
 typedef struct
 {
-    gsl_vector *gsl;
+    double *data;
     size_t size;
+
+    // TODO: remove
+    gsl_vector *gsl;
 } vector_t;
 
 vector_t *vector_alloc(const size_t n);
@@ -28,5 +32,9 @@ double vector_min(const vector_t *v);
 
 void vector_set_all(vector_t *v, double x);
 void vector_set_zero(vector_t *v);
+void vector_set_ones(vector_t *v);
+
+vector_t *vector_concat(const vector_t *v, const double x);
+bool has_nonpositive_elements(const vector_t *v);
 
 #endif  /* VECTOR_H_ */

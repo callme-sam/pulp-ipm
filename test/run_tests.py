@@ -11,7 +11,7 @@ sys.path.append(str(Path(__file__).parent.parent / "python" / "lp_solver"))
 from lp_solver import LPSolver
 
 # Configuration
-NUM_TESTS = 20
+NUM_TESTS = 100
 MIN_M = 2       # Minimum number of constraints
 MAX_M = 5       # Maximum number of constraints
 MIN_N = 6       # Minimum number of variables (n > m)

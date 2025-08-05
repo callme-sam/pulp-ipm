@@ -607,9 +607,10 @@ static void build_auxiliary_lp(const matrix_t *A, const vector_t *b, matrix_t **
     *b1 = vector_alloc(rows);
     *c1 = vector_alloc(cols + 1);
     A_ones = vector_alloc(rows);
+    ones = vector_alloc(cols);
 
     // Build A1 = [A, -A*ones]
-    ones = vector_ones(cols);
+    vector_set_ones(ones);
     blas_dgemv(BLAS_NO_TRANSPOSE, -1.0, A, ones, 0.0, A_ones);
     for (size_t i = 0; i < rows; i++) {
         for (size_t j = 0; j < cols; j++)
@@ -655,7 +656,8 @@ static void build_auxiliary_initial_point(const vector_t *x, vector_t **z0)
     v_len = x->size;
 
     // Compute z0 = [x + (t-1)*ones, t], with t = 2 - min_x
-    ones = vector_ones(v_len);
+    ones = vector_alloc(v_len);
+    vector_set_ones(ones);
     tmp = vector_alloc(v_len);
     t = 2.0 - vector_min(x);
     vector_memcpy(tmp, x);

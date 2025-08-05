@@ -50,11 +50,6 @@ void log_vector(LogLevel level, const vector_t *v, const char *name);
 
 const char* err_to_str(const int err);
 
-bool has_nonpositive_elements(const vector_t *v);
-
-vector_t *vector_ones(size_t n);
-vector_t *vector_concat(const vector_t *v, double b);
-
 void generate_lp(matrix_t **A, vector_t **b, vector_t **c);
 
 #endif  /* UTILS_H_ */

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "ipm.h"
+#include "log.h"
 #include "utils.h"
 
 int main()

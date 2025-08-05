@@ -1,9 +1,10 @@
 #include <math.h>
 
 #include "blas.h"
-#include "ipm.h"
 #include "linalg.h"
-#include "utils.h"
+#include "log.h"
+
+#include "ipm.h"
 
 #define MAX_ITER    (100)
 #define PINV_TOL    (1e-10)

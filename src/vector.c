@@ -1,4 +1,5 @@
-#include "utils.h"
+#include "log.h"
+
 #include "vector.h"
 
 vector_t *vector_alloc(const size_t n)

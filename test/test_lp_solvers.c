@@ -1,7 +1,8 @@
-#include "../inc/ipm.h"
-#include "test_utils.h"
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "ipm.h"
+#include "test_utils.h"
 
 int main(int argc, char* argv[]) {
     if (argc != 5) {

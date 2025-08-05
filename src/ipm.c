@@ -394,9 +394,6 @@ static double backtracking_line_search(const matrix_t *A, const vector_t *b, con
         }
     }
 
-    if (t <= 1e-12)
-        LOG_WARNING("Warning: Line search reached minimum step size");
-
     return t;
 }
 

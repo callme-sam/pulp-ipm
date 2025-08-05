@@ -5,6 +5,10 @@
 
 typedef struct
 {
+    size_t size;
+    size_t *data;
+
+    // TODO: remove
     gsl_permutation *gsl;
 } permutation_t;
 

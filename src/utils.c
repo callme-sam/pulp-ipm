@@ -38,25 +38,24 @@ void generate_lp(matrix_t **A, vector_t **b, vector_t **c)
 
     tmp = vector_alloc(cols);
 
-    rng_env_setup();
     rng_t *rng = rng_alloc();
     rng_set(rng, time(NULL));
 
     for (size_t i = 0; i < rows; i++) {
         for (size_t j = 0; j < cols; j++) {
-            double val = rand_normal(rng);
+            double val = rng_normal(rng);
             matrix_set(*A, i, j, val);
         }
     }
 
     // A[0, :] = rand + 0.1 (boundedness)
     for (size_t j = 0; j < cols; j++) {
-        double val = rand_uniform(rng) + 0.1;
+        double val = rng_uniform(rng) + 0.1;
         matrix_set(*A, 0, j, val);
     }
 
     for (size_t j = 0; j < cols; j++) {
-        double val = rand_uniform(rng) + 0.01;
+        double val = rng_uniform(rng) + 0.01;
         vector_set(tmp, j, val);
     }
 
@@ -65,7 +64,7 @@ void generate_lp(matrix_t **A, vector_t **b, vector_t **c)
 
     // c ~ U(0,1)
     for (size_t j = 0; j < cols; j++) {
-        vector_set(*c, j, rand_uniform(rng));
+        vector_set(*c, j, rng_uniform(rng));
     }
 
     vector_free(tmp);

@@ -83,7 +83,40 @@ int linalg_lu_decomp(matrix_t *A, permutation_t *p, int *signum)
 
 int linalg_lu_solve(const matrix_t *LU, const permutation_t *p, const vector_t *v, vector_t *x)
 {
-    return gsl_linalg_LU_solve(LU->gsl, p->gsl, v->gsl, x->gsl);
+    vector_t *y;
+    size_t rows;
+    size_t cols;
+
+    rows = LU->size1;
+    cols = LU->size2;
+    y = vector_alloc(rows);
+
+    /* Forward substitution (Ly = Pv) */
+    for (size_t i = 0; i < rows; i++) {
+        double sum;
+        size_t p_i;
+
+        sum = 0.0;
+        p_i = p->data[i];
+        for (size_t j = 0; j < i; j++) {
+            sum += LU->data[i * cols + j] * y->data[j];
+        }
+        y->data[i] = v->data[p_i] - sum;
+    }
+
+    /* Backward substitution (Ux = y) */
+    for (int i = (rows - 1); i >= 0; i--) {
+        double sum;
+
+        sum = 0.0;
+        for (size_t j = (i + 1); j < cols; j++) {
+            sum += LU->data[i * cols + j] * x->data[j];
+        }
+        x->data[i] = (y->data[i] - sum) / LU->data[i * cols + i];
+    }
+
+    vector_free(y);
+    return 0;
 }
 
 int linalg_sv_decomp(matrix_t *A, matrix_t *V, vector_t *S, vector_t *work)

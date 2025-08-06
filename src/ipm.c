@@ -780,7 +780,6 @@ static vector_t *pinv_solve(const matrix_t *A, const vector_t *b)
 {
     LOG_INFO("Solving pseudo-inverse via SVD");
 
-    vector_t *work;
     vector_t *tmp;
     vector_t *x;
     vector_t *S;
@@ -795,13 +794,12 @@ static vector_t *pinv_solve(const matrix_t *A, const vector_t *b)
     if (rows >= cols) {
         U = matrix_alloc(rows, cols);
         V = matrix_alloc(cols, cols);
-        work = vector_alloc(cols);
         tmp = vector_alloc(cols);
         S = vector_alloc(cols);
         x = vector_alloc(cols);
 
         matrix_memcpy(U, A);
-        linalg_sv_decomp(U, V, S, work);
+        linalg_sv_decomp(U, V, S);
 
         blas_dgemv(BLAS_TRANSPOSE, 1.0, U, b, 0.0, tmp);    // tmp = Uᵗ b
 
@@ -820,13 +818,12 @@ static vector_t *pinv_solve(const matrix_t *A, const vector_t *b)
         // Transpose A and compute SVD of Aᵗ
         U = matrix_alloc(cols, rows);
         V = matrix_alloc(rows, rows);
-        work = vector_alloc(rows);
         tmp = vector_alloc(rows);
         S = vector_alloc(rows);
         x = vector_alloc(cols);
 
         matrix_transpose_memcpy(U, A);                  // U = Aᵗ
-        linalg_sv_decomp(U, V, S, work);
+        linalg_sv_decomp(U, V, S);
 
         blas_dgemv(BLAS_TRANSPOSE, 1.0, V, b, 0.0, tmp);    // tmp = Vᵗ b
 
@@ -843,7 +840,6 @@ static vector_t *pinv_solve(const matrix_t *A, const vector_t *b)
         blas_dgemv(BLAS_NO_TRANSPOSE, 1.0, U, tmp, 0.0, x);  // x = V * Σ⁺ * tmp
     }
 
-    if (work) vector_free(work);
     if (tmp) vector_free(tmp);
     if (U) matrix_free(U);
     if (V) matrix_free(V);

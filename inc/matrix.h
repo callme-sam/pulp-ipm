@@ -25,5 +25,6 @@ int matrix_transpose_memcpy(matrix_t *dst, const matrix_t *src);
 int matrix_memcpy(matrix_t *dst, const matrix_t *src);
 
 void matrix_swap_rows(matrix_t *m, const size_t i, const size_t j);
+void matrix_set_identity(matrix_t *m);
 
 #endif  /* MATRIX_H_ */

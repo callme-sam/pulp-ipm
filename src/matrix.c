@@ -121,3 +121,18 @@ void matrix_swap_rows(matrix_t *m, const size_t i, const size_t j)
         row_j[k] = tmp;
     }
 }
+
+void matrix_set_identity(matrix_t *m)
+{
+    size_t rows;
+    size_t cols;
+
+    rows = m->size1;
+    cols = m->size2;
+
+    for (size_t i = 0; i < rows; i++) {
+        for (size_t j = 0; j < cols; j++) {
+            m->data[i * cols + j] = 1.0;
+        }
+    }
+}

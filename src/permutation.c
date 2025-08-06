@@ -30,3 +30,21 @@ void permutation_free(permutation_t *p)
         gsl_permutation_free(p->gsl);
     free(p);
 }
+
+void permutation_set_identity(permutation_t *p)
+{
+    size_t p_len;
+
+    p_len = p->size;
+    for (size_t i = 0; i < p_len; i++)
+        p->data[i] = i;
+}
+
+void permutation_swap(permutation_t *p, const size_t i, const size_t j)
+{
+    size_t tmp;
+
+    tmp = p->data[i];
+    p->data[i] = p->data[j];
+    p->data[j] = tmp;
+}

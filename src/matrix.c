@@ -104,3 +104,20 @@ int matrix_memcpy(matrix_t *dst, const matrix_t *src)
 
     return 0;
 }
+
+void matrix_swap_rows(matrix_t *m, const size_t i, const size_t j)
+{
+    double *row_i;
+    double *row_j;
+    size_t cols;
+
+    cols = m->size2;
+    row_i = &(m->data[i * cols]);
+    row_j = &(m->data[j * cols]);
+
+    for (size_t k = 0; k < cols; k++) {
+        double tmp = row_i[k];
+        row_i[k] = row_j[k];
+        row_j[k] = tmp;
+    }
+}

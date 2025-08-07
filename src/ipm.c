@@ -595,7 +595,7 @@ static solution_t solve_feasible_start(const matrix_t *A, const vector_t *b, con
  * @param[out] c1  Pointer to the newly allocated auxiliary cost vector of size (n+1).
  *
  * @note The caller is responsible for freeing the output pointers (`*A1`, `*b1`, `*c1`)
- *       using the appropriate GSL functions.
+ *       using the appropriate functions.
  */
 static void build_auxiliary_lp(const matrix_t *A, const vector_t *b, matrix_t **A1, vector_t **b1, vector_t **c1)
 {
@@ -686,7 +686,7 @@ static void build_auxiliary_initial_point(const vector_t *x, vector_t **z0)
  * @param[in] aux_x_opt Optimal solution vector of the auxiliary LP (size n+1).
  * @param[in] v_len     Dimension of the original LP variables (i.e., n).
  *
- * @return A newly allocated GSL vector containing the feasible point for the original LP.
+ * @return A newly allocated vector containing the feasible point for the original LP.
  *
  * @warning The caller is responsible for freeing the returned vector using `vector_free()`.
  */
@@ -766,10 +766,10 @@ static solution_t solve_auxiliary_lp(const matrix_t *A, const vector_t *b, const
  * using the pseudo-inverse \( A^+ \) obtained via Singular Value Decomposition (SVD).
  * This method works for both overdetermined and underdetermined systems.
  *
- * @param[in] A Pointer to a GSL matrix of size M×N representing the system matrix.
- * @param[in] b Pointer to a GSL vector of size M representing the right-hand side.
+ * @param[in] A Pointer to a matrix of size M×N representing the system matrix.
+ * @param[in] b Pointer to a vector of size M representing the right-hand side.
  *
- * @return On success: a newly allocated GSL vector of size N containing the solution \( x = A^+ b \).
+ * @return On success: a newly allocated vector of size N containing the solution \( x = A^+ b \).
  *         On failure: NULL (e.g., due to memory allocation failure or invalid input).
  *
  * @warning The caller is responsible for freeing the returned vector using `vector_free()`.
@@ -917,9 +917,9 @@ static solution_t phase_one(const matrix_t *A, const vector_t *b)
  *
  * If Phase I fails, the problem is declared INFEASIBLE.
  *
- * @param A Constraint matrix (m x n) of the LP problem.
- * @param b Right-hand side vector (m x 1) of the constraints.
- * @param c Coefficient vector of the objective function (n x 1).
+ * @param[in] A Constraint matrix (m x n) of the LP problem.
+ * @param[in] b Right-hand side vector (m x 1) of the constraints.
+ * @param[in] c Coefficient vector of the objective function (n x 1).
  *
  * @return solution_t A `solution_t` object containing:
  *  - `status`: the solution status (e.g., OPTIMAL, INFEASIBLE).

@@ -1,9 +1,9 @@
 #include "log.h"
 
 /**
- * @brief Logs the contents of a GSL matrix with a custom label.
+ * @brief Logs the contents of a matrix with a custom label.
  *
- * This function prints the contents of a GSL matrix to the log output,
+ * This function prints the contents of a matrix to the log output,
  * formatted as a human-readable 2D array with a descriptive label.
  * Each row is printed on a separate line, with elements separated by commas:
  * ```
@@ -15,7 +15,7 @@
  * Logging only occurs if the specified `level` is less than or equal to `CURRENT_LOG_LEVEL`.
  *
  * @param[in] level Logging severity level (e.g., DEBUG, INFO, ERROR).
- * @param[in] m Pointer to the GSL matrix to be logged.
+ * @param[in] m Pointer to the matrix to be logged.
  * @param[in] name Descriptive name of the matrix, shown in the log output.
  *
  * @note The function dynamically allocates memory to format the matrix string.
@@ -55,9 +55,9 @@ void log_matrix(LogLevel level, const matrix_t *m, const char *name) {
 }
 
 /**
- * @brief Logs the contents of a GSL vector with a custom label.
+ * @brief Logs the contents of a vector with a custom label.
  *
- * This function formats and prints the elements of a GSL vector using a specified log level.
+ * This function formats and prints the elements of a vector using a specified log level.
  * The vector is printed in the format:
  * ```
  * Vector <name> (size = n):
@@ -66,7 +66,7 @@ void log_matrix(LogLevel level, const matrix_t *m, const char *name) {
  * Logging only occurs if the specified level is less than or equal to the current log level.
  *
  * @param[in] level Logging severity level
- * @param[in] v Pointer to the GSL vector to be printed.
+ * @param[in] v Pointer to the vector to be printed.
  * @param[in] name Descriptive name to be shown in the log output.
  *
  * @note The function allocates temporary memory to construct the formatted log message.

@@ -4,6 +4,17 @@
 
 #include "rng.h"
 
+/**
+ * @brief Allocates and initializes a new RNG instance.
+ *
+ * Creates a new random number generator with default initial state (seed = 1).
+ *
+ * @return rng_t* Pointer to newly allocated RNG instance
+ * @retval NULL if memory allocation fails
+ *
+ * @note The generator should be seeded with rng_set() for proper randomization.
+ * @warning The caller is responsible for freeing the RNG with rng_free().
+ */
 rng_t *rng_alloc()
 {
     rng_t *r;
@@ -17,20 +28,49 @@ rng_t *rng_alloc()
     return r;
 }
 
+/**
+ * @brief Releases memory allocated for an RNG instance.
+ *
+ * Safely deallocates the RNG object. Handles NULL pointers gracefully.
+ *
+ * @param[in] r RNG instance to free
+ */
 void rng_free(rng_t *r)
 {
     if (!r) return;
     free(r);
 }
 
+/**
+ * @brief Seeds the random number generator.
+ *
+ * Initializes the RNG state. A seed of 0 is automatically converted to 1.
+ *
+ * @param[in,out] r RNG instance to seed
+ * @param[in] seed Seed value (0 is converted to 1)
+ *
+ * @pre r must be a valid RNG instance (non-NULL)
+ * @post The RNG state is initialized for pseudo-random sequence generation
+ */
 void rng_set(rng_t *r, unsigned long int seed)
 {
     r->state = (seed == 0) ? 1 : seed;
 }
 
+/**
+ * @brief Generates a uniform random number in [0,1).
+ *
+ * Uses 32-bit XorShift algorithm for high-performance uniform random number generation.
+ *
+ * @param[in] r Initialized RNG instance
+ * @return double Random number in the interval [0,1)
+ *
+ * @pre r must be properly initialized (via rng_alloc() and optionally rng_set())
+ * @note The sequence period is 2^32 - 1
+ * @warning Not cryptographically secure
+ */
 double rng_uniform(rng_t *r)
 {
-    // Uses XorShift @ 32-bit
     uint32_t x;
 
     x = (uint32_t) r->state;
@@ -42,9 +82,19 @@ double rng_uniform(rng_t *r)
     return (double) x / (double) UINT32_MAX;
 }
 
+/**
+ * @brief Generates a normally distributed random number (mean=0, variance=1).
+ *
+ * Uses the Box-Muller transform to convert uniform random numbers to normal distribution.
+ *
+ * @param[in] rng Initialized RNG instance
+ * @return double Random number from standard normal distribution N(0,1)
+ *
+ * @pre rng must be properly initialized
+ * @note Uses polar form of Box-Muller for numerical stability
+ */
 double rng_normal(rng_t *rng)
 {
-    // Uses Box-Muller method
     double u1;
     double u2;
     double r;

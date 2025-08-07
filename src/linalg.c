@@ -7,6 +7,18 @@
 #define MAX_ITER 100
 #define EPSILON 1e-12
 
+/**
+ * @brief Computes the matrix product AᵀA
+ *
+ * Calculates the symmetric matrix B = AᵀA where:
+ * - A is m×n (rows × cols)
+ * - B is n×n symmetric positive semi-definite
+ *
+ * @param[in] A Input matrix (m×n)
+ * @param[out] B Output matrix (n×n) containing AᵀA
+ *
+ * @note Uses optimized computation exploiting symmetry (B[i][j] = B[j][i])
+ */
 static void product_AtA(const matrix_t *A, matrix_t *B)
 {
     size_t rows;
@@ -29,6 +41,24 @@ static void product_AtA(const matrix_t *A, matrix_t *B)
     }
 }
 
+/**
+ * @brief Computes SVD of a symmetric matrix using Jacobi rotations
+ *
+ * Diagonalizes matrix B to obtain its eigenvalues (singular values squared)
+ * and eigenvectors (right singular vectors). Implements the classic Jacobi
+ * eigenvalue algorithm with:
+ * - Cyclic sweeps through off-diagonal elements
+ * - Givens rotations to zero out pivot elements
+ * - Early termination when off-diagonals are sufficiently small
+ *
+ * @param[in,out] B Symmetric matrix to diagonalize (overwritten during computation)
+ * @param[out] V Matrix of eigenvectors (right singular vectors)
+ * @param[out] S Vector of singular values (square roots of eigenvalues)
+ *
+ * @note B must be symmetric on input
+ * @note V must be initialized to identity
+ * @note S must be pre-allocated
+ */
 static void jacobi_svd(matrix_t *B, matrix_t *V, vector_t *S)
 {
     size_t cols;
@@ -125,6 +155,18 @@ static void jacobi_svd(matrix_t *B, matrix_t *V, vector_t *S)
     }
 }
 
+/**
+ * @brief Computes left singular vectors U from A, V, and Σ
+ *
+ * Calculates U = AVΣ⁻¹ where:
+ * - Σ⁻¹ is the pseudo-inverse of the diagonal matrix of singular values
+ * - Columns corresponding to zero singular values are set to zero
+ *
+ * @param[in] A_orig Original input matrix (m×n)
+ * @param[in] V Right singular vectors (n×n)
+ * @param[in] S Singular values (length n)
+ * @param[out] U_out Output matrix for left singular vectors (m×n)
+ */
 static void compute_U_from_AV(const matrix_t *A_orig, const matrix_t *V, const vector_t *S, matrix_t *U_out)
 {
     size_t rows;
@@ -157,17 +199,22 @@ static void compute_U_from_AV(const matrix_t *A_orig, const matrix_t *V, const v
 }
 
 /**
- * @brief Performs LU decomposition with partial pivoting.
+ * @brief Performs LU decomposition with partial pivoting
  *
- * This function decomposes a matrix A into a lower trapezoidal matrix L and an
- * upper trapezoidal matrix U such that PA = LU, where P is a permutation matrix.
- * The permutation information is stored in the permutation_t structure.
- * The LU matrix is stored in place of A.
+ * Factorizes matrix A into PA = LU where:
+ * - P is a permutation matrix (represented by permutation_t)
+ * - L is lower triangular with unit diagonal
+ * - U is upper triangular
  *
- * @param A A matrix to be decomposed. On output, it contains L and U.
- * @param p The permutation object to store row interchanges.
- * @param signum A pointer to an integer that will hold the sign of the permutation.
- * @return 0 on success, -1 on failure (e.g., matrix is singular).
+ * @param[in,out] A Matrix to factorize (overwritten with L/U factors)
+ * @param[out] p Permutation vector representing P
+ * @param[out] signum Sign of permutation (1 for even, -1 for odd)
+ * @return int 0 on success, -1 on failure (singular matrix)
+ *
+ * @pre A must be square or tall (rows ≥ cols)
+ * @pre p must be allocated with size ≥ rows of A
+ * @post A contains L in lower triangle (excluding diagonal) and U in upper triangle
+ * @warning Fails if matrix is exactly singular (zero pivot)
  */
 int linalg_lu_decomp(matrix_t *A, permutation_t *p, int *signum)
 {
@@ -233,6 +280,22 @@ int linalg_lu_decomp(matrix_t *A, permutation_t *p, int *signum)
     return 0;
 }
 
+/**
+ * @brief Solves linear system Ax = b using LU factorization
+ *
+ * Solves the system using precomputed LU decomposition from linalg_lu_decomp():
+ * 1. Forward substitution: Ly = Pb
+ * 2. Backward substitution: Ux = y
+ *
+ * @param[in] LU Matrix containing L/U factors from linalg_lu_decomp()
+ * @param[in] p Permutation vector from linalg_lu_decomp()
+ * @param[in] v Right-hand side vector b
+ * @param[out] x Solution vector
+ * @return int 0 on success, -1 on failure
+ *
+ * @pre LU must be factorized via linalg_lu_decomp()
+ * @pre All vectors must have compatible dimensions
+ */
 int linalg_lu_solve(const matrix_t *LU, const permutation_t *p, const vector_t *v, vector_t *x)
 {
     vector_t *y;
@@ -271,6 +334,22 @@ int linalg_lu_solve(const matrix_t *LU, const permutation_t *p, const vector_t *
     return 0;
 }
 
+/**
+ * @brief Computes Singular Value Decomposition (SVD) of a matrix
+ *
+ * Decomposes matrix A into A = UΣVᵀ where:
+ * - U contains left singular vectors (output in A)
+ * - Σ contains singular values (diagonal, output in S)
+ * - V contains right singular vectors
+ *
+ * @param[in,out] A Input matrix (m×n), overwritten with U on output
+ * @param[out] V Right singular vectors (n×n)
+ * @param[out] S Singular values (length n)
+ * @return int 0 on success, -1 on memory allocation failure
+ *
+ * @note Uses Jacobi method on AᵀA for numerical stability
+ * @warning For large matrices, consider more efficient algorithms
+ */
 int linalg_sv_decomp(matrix_t *A, matrix_t *V, vector_t *S)
 {
     size_t rows;

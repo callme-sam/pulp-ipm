@@ -9,21 +9,44 @@
 #include "utils.h"
 
 /**
- * @brief Generate a random feasible linear program (LP).
+ * @brief Generates a random feasible linear programming (LP) problem.
  *
- * Fills the provided matrices/vectors with data such that the LP:
- *     minimize cᵀx  subject to A x = b, x > 0
- * has a known feasible solution.
+ * Constructs a well-conditioned LP problem in standard form:
+ * \[
+ * \begin{aligned}
+ * \text{minimize} \quad & c^T x \\
+ * \text{subject to} \quad & A x = b \\
+ * & x \geq 0
+ * \end{aligned}
+ * \]
+ * with known feasible solution x₀. The problem is generated such that:
+ * - Matrix A has normally distributed entries (except first row)
+ * - First row of A ensures boundedness (uniform entries + 0.1)
+ * - Vector b is computed as A * x₀ where x₀ has uniform entries in [0.01, 1.01)
+ * - Cost vector c has uniform entries in [0,1)
  *
- * The matrix A is generated with normally distributed entries, the vector c
- * with uniform values in [0,1), and b is computed as b = A * x₀, where x₀ is a
- * strictly positive vector.
+ * @param[in,out] A Pointer to pre-allocated matrix (m×n) to fill with constraint coefficients.
+ *                   Will be modified to contain the generated matrix.
+ * @param[in,out] b Pointer to pre-allocated vector (m) to fill with RHS constraints.
+ *                   Will be modified to contain b = A * x₀.
+ * @param[in,out] c Pointer to pre-allocated vector (n) to fill with cost coefficients.
+ *                   Will be modified with uniform random costs.
  *
- * @param[out] A Pointer to an allocated GSL matrix (m × n) to be filled.
- * @param[out] b Pointer to an allocated GSL vector (m) to be filled.
- * @param[out] c Pointer to an allocated GSL vector (n) to be filled.
+ * @pre Matrices/Vectors must be pre-allocated with correct dimensions
+ * @pre rows <= cols (system must not be overconstrained)
+ * @post A, b, c contain a feasible LP problem with known solution x₀ = tmp
+ * @post The generated problem satisfies strict feasibility (x₀ > 0)
  *
- * @note A, b, and c must be allocated before calling this function.
+ * @note Uses XorShift for uniform numbers and Box-Muller for normal distribution
+ * @warning Seed is based on current time - not suitable for cryptographic purposes
+ * @warning Assumes matrices/vectors are properly allocated (will assert on rows > cols)
+ *
+ * @example
+ * // Generate a 10x20 LP problem
+ * matrix_t *A = matrix_alloc(10, 20);
+ * vector_t *b = vector_alloc(10);
+ * vector_t *c = vector_alloc(20);
+ * generate_lp(&A, &b, &c);
  */
 void generate_lp(matrix_t **A, vector_t **b, vector_t **c)
 {

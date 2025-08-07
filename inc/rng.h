@@ -1,14 +1,9 @@
 #ifndef RNG_H_
 #define RNG_H_
 
-#include <gsl/gsl_rng.h>
-
 typedef struct
 {
     unsigned long int state;
-
-    // TODO: remove
-    gsl_rng *gsl;
 } rng_t;
 
 rng_t *rng_alloc();

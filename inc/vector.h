@@ -4,15 +4,10 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include <gsl/gsl_vector.h>
-
 typedef struct
 {
     double *data;
     size_t size;
-
-    // TODO: remove
-    gsl_vector *gsl;
 } vector_t;
 
 vector_t *vector_alloc(const size_t n);

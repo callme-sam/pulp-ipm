@@ -10,16 +10,13 @@ matrix_t *matrix_alloc(const size_t n1, const size_t n2)
     if (!m)
         return NULL;
 
-    // TODO: remove - alloc m->data directly
-    m->gsl = gsl_matrix_calloc(n1, n2);
-    if (!m->gsl) {
+    m->size1 = n1;
+    m->size2 = n2;
+    m->data = malloc(n1 * n2 * sizeof(double));
+    if (!m->data) {
         free(m);
         return NULL;
     }
-
-    m->size1 = m->gsl->size1;
-    m->size2 = m->gsl->size2;
-    m->data = m->gsl->data;
 
     return m;
 }
@@ -28,9 +25,7 @@ void matrix_free(matrix_t *m)
 {
     if (!m) return;
 
-    // TODO: remove - free m->data directly
-    if (m->gsl)
-        gsl_matrix_free(m->gsl);
+    if (m->data) free(m->data);
     free(m);
 }
 

@@ -1,6 +1,8 @@
 #ifndef LOG_H_
 #define LOG_H_
 
+#include <stdio.h>
+
 #include "matrix.h"
 #include "vector.h"
 
@@ -39,7 +41,5 @@ typedef enum {
 
 void log_matrix(LogLevel level, const matrix_t *m, const char *name);
 void log_vector(LogLevel level, const vector_t *v, const char *name);
-
-const char* err_to_str(const int err);
 
 #endif  /* LOG_H_ */

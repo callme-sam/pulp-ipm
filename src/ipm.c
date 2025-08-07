@@ -300,12 +300,12 @@ static int compute_newton_step(const matrix_t *A, const vector_t *r_dual, const 
     // Solve M*dv = rhs
     int signum, status = linalg_lu_decomp(M, perm, &signum);
     if (status != 0) {
-        LOG_ERROR("LU decomposition failed: %s", err_to_str(status));
+        LOG_ERROR("LU decomposition failed");
         goto cleanup_error;
     }
     status = linalg_lu_solve(M, perm, rhs, dv);
     if (status != 0) {
-        LOG_ERROR("LU solve failed: %s", err_to_str(status));
+        LOG_ERROR("LU solve failed");
         goto cleanup_error;
     }
 

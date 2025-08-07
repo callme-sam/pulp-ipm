@@ -1,5 +1,3 @@
-#include <gsl/gsl_blas.h>
-
 #include "log.h"
 
 #include "blas.h"

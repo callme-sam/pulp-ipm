@@ -10,15 +10,12 @@ vector_t *vector_alloc(const size_t n)
     if (!v)
         return NULL;
 
-    // TODO: remove - alloc v->data directly
-    v->gsl = gsl_vector_calloc(n);
-    if (!v->gsl) {
+    v->size = n;
+    v->data = malloc(n * sizeof(double));
+    if (!v->data) {
         free(v);
         return NULL;
     }
-
-    v->size = v->gsl->size;
-    v->data = v->gsl->data;
 
     return v;
 }
@@ -27,9 +24,7 @@ void vector_free(vector_t *v)
 {
     if (!v) return;
 
-    // TODO: remove - free v->data directly
-    if (v->gsl)
-        gsl_vector_free(v->gsl);
+    if (v->data) free(v->data);
     free(v);
 }
 

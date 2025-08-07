@@ -8,15 +8,12 @@ permutation_t *permutation_alloc(const size_t n)
     if (!p)
         return NULL;
 
-    // TODO: remove - alloc p->data directrly
-    p->gsl = gsl_permutation_alloc(n);
-    if (!p->gsl) {
+    p->size = n;
+    p->data = malloc(n * sizeof(double));
+    if (!p->data) {
         free(p);
         return NULL;
     }
-
-    p->size = p->gsl->size;
-    p->data = p->gsl->data;
 
     return p;
 }
@@ -25,9 +22,7 @@ void permutation_free(permutation_t *p)
 {
     if (!p) return;
 
-    // TODO: remove - free p->data directly
-    if (p->gsl)
-        gsl_permutation_free(p->gsl);
+    if (p->data) free(p->data);
     free(p);
 }
 

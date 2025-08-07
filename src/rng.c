@@ -1,8 +1,6 @@
-#include <stdlib.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <math.h>
-
-#include <gsl/gsl_randist.h>
 
 #include "rng.h"
 
@@ -16,24 +14,13 @@ rng_t *rng_alloc()
 
     r->state = 1;
 
-    // TODO: remove
-    r->gsl = gsl_rng_alloc(gsl_rng_default);
-    if (!r->gsl) {
-        free(r);
-        return NULL;
-    }
-
     return r;
 }
 
 void rng_free(rng_t *r)
 {
     if (!r) return;
-
-    // TODO: remove
-    if (r->gsl)
-        gsl_rng_free(r->gsl);
-    free(r);    // keep
+    free(r);
 }
 
 void rng_set(rng_t *r, unsigned long int seed)

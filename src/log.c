@@ -99,8 +99,3 @@ void log_vector(LogLevel level, const vector_t *v, const char *name) {
 
     free(buf);
 }
-
-const char* err_to_str(const int err)
-{
-    return gsl_strerror(err);
-}

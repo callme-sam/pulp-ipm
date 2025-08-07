@@ -5,7 +5,7 @@ INC_DIR = ../inc
 
 CC = gcc
 CFLAGS = -I../inc -Wall -O3
-LDFLAGS = -lgsl -lgslcblas -lm
+LDFLAGS = -lm
 
 SRC = $(wildcard $(SRC_DIR)/*.c)
 

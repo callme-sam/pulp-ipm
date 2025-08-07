@@ -11,7 +11,7 @@ TARGET = $(BUILD_DIR)/ipm_solver
 
 CC = gcc
 CFLAGS = -Wall -Wextra -I$(INC_DIR)
-LDFLAGS = -lgsl -lgslcblas -lm
+LDFLAGS = -lm
 MAKEFLAGS += --no-print-directory
 
 # Makefile Verbosity

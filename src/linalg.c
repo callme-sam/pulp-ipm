@@ -1,4 +1,4 @@
-#include <gsl/gsl_linalg.h>
+#include <math.h>
 
 #include "log.h"
 

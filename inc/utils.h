@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include "matrix.h"
+#include "mem.h"
 #include "vector.h"
 
 void generate_lp(matrix_t **A, vector_t **b, vector_t **c);

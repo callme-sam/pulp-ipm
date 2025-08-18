@@ -2,6 +2,7 @@
 #define BLAS_H_
 
 #include "matrix.h"
+#include "mem.h"
 #include "vector.h"
 
 typedef enum

@@ -1,6 +1,7 @@
 # Build artifacts
 build/
 test/build
+pulp/BUILD
 
 # Editor/IDE files
 .vscode/

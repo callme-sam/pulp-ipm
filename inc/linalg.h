@@ -2,6 +2,7 @@
 #define LINALG_H_
 
 #include "matrix.h"
+#include "mem.h"
 #include "permutation.h"
 #include "vector.h"
 

@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
+// #include <time.h>
 
 #include "blas.h"
 #include "rng.h"
@@ -62,7 +62,7 @@ void generate_lp(matrix_t **A, vector_t **b, vector_t **c)
     tmp = vector_alloc(cols);
 
     rng_t *rng = rng_alloc();
-    rng_set(rng, time(NULL));
+    rng_set(rng, 0);
 
     for (size_t i = 0; i < rows; i++) {
         for (size_t j = 0; j < cols; j++) {

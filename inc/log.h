@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "matrix.h"
+#include "mem.h"
 #include "vector.h"
 
 typedef enum {
@@ -18,6 +19,22 @@ typedef enum {
 #define CURRENT_LOG_LEVEL LOG_LEVEL_INFO
 #endif
 
+#ifdef TARGET_EXECUTION
+#define LOG(level, fmt, ...) do { \
+    if ((level) <= CURRENT_LOG_LEVEL) { \
+        const char* level_str; \
+        switch(level) { \
+            case LOG_LEVEL_ERROR:   level_str = "ERROR";    break; \
+            case LOG_LEVEL_WARNING: level_str = "WARNING";  break; \
+            case LOG_LEVEL_INFO:    level_str = "INFO";     break; \
+            case LOG_LEVEL_DEBUG:   level_str = "DEBUG";    break; \
+            default:                level_str = "UNKNOWN";  break; \
+        } \
+        printf("[%s] %s:%d - " fmt "\n", \
+                level_str, __func__, __LINE__, ##__VA_ARGS__); \
+    } \
+} while(0)
+#else
 #define LOG(level, fmt, ...) do { \
     if ((level) <= CURRENT_LOG_LEVEL) { \
         const char* level_str; \
@@ -27,12 +44,13 @@ typedef enum {
             case LOG_LEVEL_WARNING: level_str = "WARNING"; stream = stderr; break; \
             case LOG_LEVEL_INFO:    level_str = "INFO";    break; \
             case LOG_LEVEL_DEBUG:   level_str = "DEBUG";   break; \
-            default:               level_str = "UNKNOWN"; break; \
+            default:                level_str = "UNKNOWN"; break; \
         } \
         fprintf(stream, "[%s] %s:%d - " fmt "\n", \
                 level_str, __func__, __LINE__, ##__VA_ARGS__); \
     } \
 } while(0)
+#endif
 
 #define LOG_ERROR(fmt, ...)   LOG(LOG_LEVEL_ERROR,   fmt, ##__VA_ARGS__)
 #define LOG_WARNING(fmt, ...) LOG(LOG_LEVEL_WARNING, fmt, ##__VA_ARGS__)

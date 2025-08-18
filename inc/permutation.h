@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 
+#include "mem.h"
+
 typedef struct
 {
     size_t size;

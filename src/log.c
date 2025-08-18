@@ -1,4 +1,45 @@
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "log.h"
+
+static size_t utoa(uint64_t val, char *buf) {
+    char temp[20];
+    int i = 0;
+    do {
+        temp[i++] = '0' + val % 10;
+        val /= 10;
+    } while (val);
+    for (int j = 0; j < i; ++j) {
+        buf[j] = temp[i - j - 1];
+    }
+    return i;
+}
+
+static size_t ftoa(double val, char *buf) {
+    char *start = buf;
+    if (val < 0) {
+        *buf++ = '-';
+        val = -val;
+    }
+    uint64_t int_part = (uint64_t)val;
+    double frac = val - int_part;
+
+    buf += utoa(int_part, buf);
+    *buf++ = '.';
+
+    frac *= 1000000;
+    uint64_t frac_part = (uint64_t)(frac + 0.5);
+
+    uint64_t pow10 = 100000;
+    while (frac_part < pow10 && pow10 > 1) {
+        *buf++ = '0';
+        pow10 /= 10;
+    }
+
+    buf += utoa(frac_part, buf);
+    return buf - start;
+}
 
 /**
  * @brief Logs the contents of a matrix with a custom label.
@@ -23,14 +64,15 @@
  *
  * @warning If memory allocation fails, the function logs an error and returns without printing.
  */
-void log_matrix(LogLevel level, const matrix_t *m, const char *name) {
+void log_matrix(LogLevel level, const matrix_t *m, const char *name)
+{
     if (level > CURRENT_LOG_LEVEL) return;
 
-    const size_t per_elem_len = 24;
+    const size_t per_elem_len = 32;
     const size_t header_len = 64;
     const size_t indent_len = 4;
-    size_t row_len = indent_len + per_elem_len * m->size2 + 2;
-    size_t buf_size = header_len + row_len * m->size1 + 1;
+    const size_t row_len = indent_len + per_elem_len * m->size2 + 2;
+    const size_t buf_size = header_len + row_len * m->size1 + 1;
 
     char *buf = malloc(buf_size);
     if (!buf) {
@@ -38,18 +80,37 @@ void log_matrix(LogLevel level, const matrix_t *m, const char *name) {
         return;
     }
 
-    size_t offset = snprintf(buf, buf_size, "Matrix %s (size = %zux%zu):\n", name, m->size1, m->size2);
+    char *p = buf;
+
+    const char *prefix = "Matrix ";
+    const char *midfix = " (size = ";
+    const char *xfix = "x";
+    const char *suffix = "):\n";
+
+    for (const char *s = prefix; *s; ++s) *p++ = *s;
+    for (const char *s = name; *s; ++s) *p++ = *s;
+    for (const char *s = midfix; *s; ++s) *p++ = *s;
+
+    p += utoa(m->size1, p);
+    for (const char *s = xfix; *s; ++s) *p++ = *s;
+    p += utoa(m->size2, p);
+    for (const char *s = suffix; *s; ++s) *p++ = *s;
 
     for (size_t i = 0; i < m->size1; ++i) {
-        offset += snprintf(buf + offset, buf_size - offset, "\t[");
+        *p++ = '\t';
+        *p++ = '[';
         for (size_t j = 0; j < m->size2; ++j) {
-            offset += snprintf(buf + offset, buf_size - offset, "%g%s",
-                               matrix_get(m, i, j), (j < m->size2 - 1) ? ", " : "");
+            p += ftoa(matrix_get(m, i, j), p);
+            if (j < m->size2 - 1) {
+                *p++ = ',';
+                *p++ = ' ';
+            }
         }
-        offset += snprintf(buf + offset, buf_size - offset, "]\n");
+        *p++ = ']';
+        *p++ = '\n';
     }
-    buf[offset] = '\0';
 
+    *p = '\0';
     LOG(level, "%s", buf);
     free(buf);
 }
@@ -75,27 +136,42 @@ void log_matrix(LogLevel level, const matrix_t *m, const char *name) {
  * @warning If memory allocation fails, the function logs an error and exits early.
  */
 void log_vector(LogLevel level, const vector_t *v, const char *name) {
-   if (level > CURRENT_LOG_LEVEL) return;
+    if (level > CURRENT_LOG_LEVEL) return;
 
-   const size_t per_elem_len = 24;
+    const size_t per_elem_len = 32;
     const size_t header_len = 64;
-    size_t buf_size = header_len + per_elem_len * v->size;
+    const size_t buf_size = header_len + per_elem_len * v->size + 3; // +3 for "[]\0"
+
     char *buf = malloc(buf_size);
     if (!buf) {
         LOG_ERROR("Failed to allocate memory for vector logging");
         return;
     }
 
-    size_t offset = snprintf(buf, buf_size, "Vector %s (size = %zu):\n\t[", name, v->size);
+    char *p = buf;
+
+    // Header: "Vector <name> (size = N):\n\t["
+    const char *prefix = "Vector ";
+    const char *midfix = " (size = ";
+    const char *suffix = "):\n\t[";
+
+    for (const char *s = prefix; *s; ++s) *p++ = *s;
+    for (const char *s = name; *s; ++s) *p++ = *s;
+    for (const char *s = midfix; *s; ++s) *p++ = *s;
+    p += utoa(v->size, p);
+    for (const char *s = suffix; *s; ++s) *p++ = *s;
 
     for (size_t i = 0; i < v->size; ++i) {
-        offset += snprintf(buf + offset, buf_size - offset, "%g%s",
-                           vector_get(v, i), (i < v->size - 1) ? ", " : "");
+        p += ftoa(vector_get(v, i), p);
+        if (i < v->size - 1) {
+            *p++ = ',';
+            *p++ = ' ';
+        }
     }
 
-    snprintf(buf + offset, buf_size - offset, "]");
+    *p++ = ']';
+    *p = '\0';
 
     LOG(level, "%s", buf);
-
     free(buf);
 }

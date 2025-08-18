@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#include "mem.h"
+
 typedef struct
 {
     double *data;

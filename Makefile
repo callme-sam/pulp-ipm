@@ -66,3 +66,9 @@ test:
 
 test_clean:
 	$(V)$(MAKE) -C test clean
+
+pulp_run:
+	$(V)$(MAKE) -C pulp clean all run
+
+pulp_clean:
+	$(V)$(MAKE) -C pulp clean

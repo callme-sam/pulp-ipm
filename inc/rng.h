@@ -1,6 +1,8 @@
 #ifndef RNG_H_
 #define RNG_H_
 
+#include "mem.h"
+
 typedef struct
 {
     unsigned long int state;
